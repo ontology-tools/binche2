@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block head %}
+<title>BinChe2</title>
+{% endblock %}
+
+{% block body %}
+
+{% if user_study_set %}
+    <h2>You submitted:</h2>
+    <p>{{ user_study_set }}</p>
+
+    <form action = "/run_analysis" method = "POST">
+
+        <!-- P-VALUE CORRECTION METHOD -->
+         <h3>Choose p-value correction method:</h3><br>
+        <label for="p_value_correction_method">P-value correction method:</label> 
+        <select name ="p_value_correction_method" id="p_value_correction_method">
+            <option value="benjamini_hochberg">Benjamini-Hochberg</option>
+            <option value="bonferroni">Bonferroni</option>
+            <option value="none">None</option>
+        </select>
+        <br><br>
+        
+        <h3>Choose pruning methods:</h3><br>
+        <!-- ROOT CHILDREN PRUNE -->
+        <label>
+            <input type="checkbox" name="root_children_prune" value="true"> 
+            Root-children pruning
+        </label><br>
+        Levels:
+        <input type="number" name="levels" value="2" min="0">
+        <br><br>
+
+        <!-- LINEAR BRANCH PRUNE -->
+        <label>
+            <input type="checkbox" name="linear_branch_prune" value="true"> 
+            Linear branch pruning
+        </label><br>
+        n (keep every n:th node):
+        <input type ="number" name="linear_branch_n" value ="2" min="2">
+        <br><br>
+
+        <!-- HIGH P-VALUE PRUNE -->
+        <label>
+            <input type="checkbox" name="high_p_value_prune" value="true"> 
+            High p-value pruning    
+        </label><br>
+        p-value threshold:
+        <input type="number" name="p_value_threshold" value="0.05" step="0.01" min="0" max="1">
+        <br><br>
+
+        <!-- ZERO DEGREE PRUNE --> 
+        <label>
+            <input type="checkbox" name="zero_degree_prune" value="true"> 
+            Zero-degree pruning
+        </label><br><br>
+
+        <button type = "submit"
+         style="display:inline-block; padding:8px 16px; margin-top:20px; 
+          background:#4CAF50; color: white; text-decoration:none; 
+          border-radius:4px;"> 
+          Run Analysis</button>
+
+    </form>
+
+    <a href="/" 
+   style="display:inline-block; padding:8px 16px; margin-top:20px; 
+          background:#0f808d; color: white; text-decoration:none; 
+          border-radius:4px; cursor: pointer;">
+    Change submission
+    </a>
+{% else %}
+    <h2>No study set submitted.</h2>
+    <a href="/"
+    style="display:inline-block; padding:8px 16px; margin-top:20px; 
+             background:#0f808d; color: white; text-decoration:none; 
+             border-radius:4px;">
+    Back to homepage
+{% endif %}
+
+
+
+{% endblock %}

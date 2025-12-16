@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block head %}
+<title>BinChe2</title>
+{% endblock %}
+
+{% block body %}
+<h1>Welcome to BinChe2</h1>
+<p>This is the homepage of the BinChe2 web application.</p>
+<p>You can insert your study set below.</p>
+<p>Example submission:
+    CHEBI_77030, CHEBI_79036
+</p>
+
+<form action = "/submission" method = "POST">
+    <textarea name = "study_set" rows="20" cols="100" placeholder="Enter your study set here"></textarea>
+    <button type = "submit">Submit</button>
+</form>
+
+{% endblock %}
+

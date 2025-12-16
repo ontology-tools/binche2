@@ -1,0 +1,456 @@
+{% extends "base.html" %}
+
+{% block head %}
+{{ super()}} <!-- Retain any head content from base.html -->
+<title>Graph Visualisation</title>
+
+<!-- Cytoscape -->
+<script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
+
+<!-- jQuery + qTip2 -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/qtip2/3.0.3/jquery.qtip.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qtip2/3.0.3/jquery.qtip.min.js"></script>
+
+<!-- Cytoscape-qTip extension -->
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-qtip@2.7.0/cytoscape-qtip.min.js"></script>
+
+{% endblock %}
+
+{% block body %}
+<h1>Enrichment</h1>
+
+<div class="graph-wrapper">
+    <div class="navbar">
+        <a href="/">Home</a>
+
+        <div class="dropdown">
+            <button class="dropbtn">Export ▾
+            <i class="fa fa-caret-down"></i>
+            </button>
+            <div class="dropdown-content">
+                <a href="#" class="export-option" data-format="png">Export as PNG</a>
+                <a href="#" class="export-option" data-format="jpeg">Export as JPEG</a>
+            </div>
+        </div>
+
+        <div class="dropdown">
+            <button class="dropbtn">Layout ▾
+            <i class="fa fa-caret-down"></i>
+            </button>
+            <div class="dropdown-content">
+                <a href="#" class="layout-option" data-layout="breadthfirst">Breadthfirst</a>
+                <a href="#" class="layout-option" data-layout="cose">Cose</a>
+                <a href="#" class="layout-option" data-layout="grid">Grid</a>
+                <a href="#" class="layout-option" data-layout="circle">Circle</a>
+            </div>
+        </div>
+
+        <div class="dropdown">
+            <button class="dropbtn">Show/Hide ▾
+            <i class="fa fa-caret-down"></i>
+            </button>
+            <div class="dropdown-content">
+                <a href="#" class="show-hide-option" data-action="hide-unselected">Show selected only</a>
+                <a href="#" class="show-hide-option" data-action="hide-selected">Hide selected</a>
+                <a href="#" class="show-hide-option" data-action="show-all">Show all nodes</a>
+                <a href="#" class="show-hide-option" data-action="hide-labels">Hide/Show labels</a>
+            </div>
+        </div>
+
+        <div class="popup-wrapper">
+            <div class="popup" onclick="adjustPruning()">Pruning
+                <span class="popuptext" id="pruningPopup" onclick="event.stopPropagation()">
+                    <form action = "/run_analysis" method = "POST">
+                        
+                        <!-- P-VALUE CORRECTION METHOD -->
+                         <h3>Change correction method and pruning:</h3>
+                        <label for="p_value_correction_method">P-value correction method:</label> 
+                        <select name ="p_value_correction_method" id="p_value_correction_method">
+                            <option value="benjamini_hochberg" {% if correction_method.get('benjamini_hochberg_correct') %} selected {% endif %}>Benjamini-Hochberg</option>
+                            <option value="bonferroni" {% if correction_method.get('bonferroni_correct') %} selected {% endif %}>Bonferroni</option>
+                            <option value="none" {% if not correction_method.get('bonferroni_correct') and not correction_method.get('benjamini_hochberg_correct') %} selected {% endif %}>None</option>
+                        </select>
+
+                        <br><br>
+                        <!-- ROOT CHILDREN PRUNE -->
+                        <label>
+                            <input type="checkbox" name="root_children_prune" value="true"
+                            {% if pruning.get('root_children_prune') %} checked {% endif %}> 
+                            Root-children pruning
+                        </label><br>
+                        Levels:
+                        <input type="number" name="levels" min="0" value="{{ pruning.get('levels', 2) }}">
+                        <br><br>
+
+                        <!-- LINEAR BRANCH PRUNE -->
+                        <label>
+                            <input type="checkbox" name="linear_branch_prune" value="true"
+                            {% if pruning.get('linear_branch_prune') %} checked {% endif %}> 
+                            Linear branch pruning
+                        </label><br>
+                        n (keep every n:th node):
+                        <input type ="number" name="linear_branch_n" min="2" value="{{ pruning.get('linear_branch_n', 2) }}">
+                        <br><br>
+
+                        <!-- HIGH P-VALUE PRUNE -->
+                        <label>
+                            <input type="checkbox" name="high_p_value_prune" value="true"
+                            {% if pruning.get('high_p_value_prune') %} checked {% endif %}> 
+                            High p-value pruning    
+                        </label><br>
+                        p-value threshold:
+                        <input type="number" name="p_value_threshold" step="0.01" min="0" max="1" value="{{ pruning.get('p_value_threshold', 0.05) }}">
+                        <br><br>
+
+                        <!-- ZERO DEGREE PRUNE --> 
+                        <label>
+                            <input type="checkbox" name="zero_degree_prune" value="true"
+                            {% if pruning.get('zero_degree_prune') %} checked {% endif %}> 
+                            Zero-degree pruning
+                        </label><br><br>
+
+                        <button type = "submit">Re-run enrichment calculations</button>
+
+                    </form>
+                </span>   
+            </div>
+        </div>
+
+
+    </div>
+
+    <div id="cy"></div>
+
+    <div id="color-legend">
+    <h4>Significance</h4>
+    <div class="legend-container">
+        <div class="legend-gradient"></div>
+        <div class="legend-labels">
+            <span>Low (1.0)</span>
+            <span id="legend-max">High</span>
+        </div>
+    </div>
+
+</div>
+</div>
+
+<script>
+
+    function adjustPruning() {
+        const popup = document.getElementById("pruningPopup");
+        popup.classList.toggle("show");
+    }
+    // Close the popup if the user clicks outside of it
+    window.onclick = function(event) {
+      if (!event.target.matches('.popup')) {
+        var popup = document.getElementById("pruningPopup");
+        if (popup.classList.contains('show')) {
+          popup.classList.remove('show');
+        }
+      }
+    }
+</script>
+
+
+<script>
+    fetch("{{url_for('static', filename='data/graph.json')}}")
+    .then(response => response.json())
+    .then(data => {
+        var cy = cytoscape({
+            container: document.getElementById('cy'),
+            elements: data.elements,
+
+            selectionType: 'additive', // Allow multiple node selection 
+
+            style: [
+                {
+                    selector: 'node',
+                    style: {
+                        'background-color': 'data(color)',
+                        'label': 'data(short_label)',
+                        'width': 30,
+                        'height': 30,
+                        'font-size': 10,
+                        'text-valign': 'bottom',
+                        'text-halign': 'center',
+                        'color': '#000',
+                        'border-width': 1,
+                        'border-color': '#555'
+
+                    }
+                },
+                // Style for selected nodes
+                {
+                    selector: 'node:selected',
+                    style: {
+                        'border-width': 5,
+                        'border-color': '#0540e3' // Blue color for selected nodes
+                    }
+                },
+
+                {
+                    selector: 'edge',
+                    style: {
+                        'width': 2,
+                        'line-color': '#888',
+                        'target-arrow-color': '#888',
+                        'target-arrow-shape': 'triangle',   
+                        'curve-style': 'bezier'
+                    }
+                }
+            ],
+            layout: {
+                name: 'breadthfirst',
+                directed: true,
+                padding: 10
+            }
+        });
+
+        let labelsVisible = true;
+
+        /////////
+        // Dynamic colouring based on p-value
+        /////////
+
+        // Collect maximum value
+        let maxExponent = 0;
+
+
+        cy.nodes().forEach(node =>{
+            const p = node.data('p_value_corrected') || node.data('p_value'); // Use corrected p-value if available, else raw p-value
+            if (p != null && p > 0) {
+                const exp = -Math.log10(p);
+                if (exp > maxExponent) maxExponent = exp;
+
+            }
+        });
+
+        // Update legend with actual max value
+        const maxPvalue = Math.pow(10, -maxExponent);
+        document.getElementById('legend-max').textContent = `High (${maxPvalue.toExponential(1)})`;
+
+        // Convert hex to RGB
+        function hexToRgb(hex) {
+            hex = hex.replace('#', '');
+            return {
+                r: parseInt(hex.substring(0, 2), 16),
+                g: parseInt(hex.substring(2, 4), 16),
+                b: parseInt(hex.substring(4, 6), 16)
+            };
+        }
+
+        // Linear interpolation between two colors
+        function interpolateColor(colorLow, colorHigh, t) {
+            const c1 = hexToRgb(colorLow);
+            const c2 = hexToRgb(colorHigh);
+
+            const r = Math.round(c1.r + (c2.r - c1.r) * t);
+            const g = Math.round(c1.g + (c2.g - c1.g) * t);
+            const b = Math.round(c1.b + (c2.b - c1.b) * t);
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // Update node colours based on p-value
+        const colorLow = "#ca3900";  
+        const colorHigh = "#ffffff";  
+
+        cy.nodes().forEach(node => {
+            const p = node.data('p_value_corrected') || node.data('p_value'); // Use corrected p-value if available, else raw p-value
+
+            let color = "lightgrey"; // default color
+
+            if (p != null && p > 0) {
+                const exponent = -Math.log10(p);
+                let t = exponent / maxExponent;
+                t = Math.max(0, Math.min(1, t)); // Clamp t between 0 and 1
+
+                color = interpolateColor(colorLow, colorHigh, t);
+      }
+
+            node.style('background-color', color);
+        });
+
+        
+        // Add tooltip to hover over nodes
+        cy.nodes().forEach(function(node) {
+            const pValue = node.data('p_value');
+            const pValueCorr = node.data('p_value_corrected');
+            
+            // Format to 2 decimal places in exponential notation (gives 3 significant figures)
+            const formattedPValue = pValue != null ? pValue.toExponential(2) : 'N/A';
+            const formattedPValueCorr = pValueCorr != null ? pValueCorr.toExponential(2) : 'N/A';
+            
+            node.qtip({
+                content: `
+                    <b>${node.data('label')}</b><br>
+                    p-value: ${formattedPValue}<br> 
+                    corr. p-value: ${formattedPValueCorr}
+                `,
+                show: {event: 'mouseover'},
+                hide: {event: 'mouseout'},
+            })
+        });
+
+        // Custom context menu div
+        const contextMenu = document.createElement('div');
+        contextMenu.id = 'context-menu';
+        contextMenu.style.cssText = 'position:absolute; display:none; background:white; border:1px solid #ccc; box-shadow:2px 2px 5px rgba(0,0,0,0.2); z-index:1000; padding:5px 0;';
+        document.body.appendChild(contextMenu);
+
+        let selectedNode = null;
+
+        cy.on('cxttap', 'node', function(evt){
+            evt.preventDefault();
+            selectedNode = evt.target;
+            
+            // Position menu at mouse coordinates
+            contextMenu.style.left = evt.originalEvent.pageX + 'px';
+            contextMenu.style.top = evt.originalEvent.pageY + 'px';
+            
+            //// Build menu content
+            // const pValue = selectedNode.data('p_value');
+            // const pValueCorr = selectedNode.data('p_value_corrected');
+            
+            contextMenu.innerHTML = `
+                <div style="padding:8px 16px; cursor:pointer; hover:background:#f0f0f0;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'" onclick="window.selectNode()">Select Node</div>
+                <div style="padding:8px 16px; cursor:pointer;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'" onclick="window.selectNeighbors()">Select first neighbors</div>
+                <div style="padding:8px 16px; cursor:pointer;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'" onclick="window.selectDescendants()">Select descendants</div>
+            `;
+            
+            contextMenu.style.display = 'block';
+        });
+
+        // Hide menu when clicking elsewhere
+        document.addEventListener('click', function() {
+            contextMenu.style.display = 'none';
+        });
+
+        // Menu actions
+        window.selectNode = function() {
+            if (selectedNode) selectedNode.select();
+            contextMenu.style.display = 'none';
+        };
+
+        // window.showDetails = function() {
+        //     if (selectedNode) {
+        //         const pValue = selectedNode.data('p_value');
+        //         const pValueCorr = selectedNode.data('p_value_corrected');
+        //         alert(`Node: ${selectedNode.data('label')}\np-value: ${pValue?.toExponential(2) || 'N/A'}\nCorrected p-value: ${pValueCorr?.toExponential(2) || 'N/A'}`);
+        //     }
+        //     contextMenu.style.display = 'none';
+        // };
+
+        window.selectNeighbors = function() {
+            if (selectedNode) {
+                selectedNode.neighborhood().select();
+            }
+            contextMenu.style.display = 'none';
+        };
+
+        window.selectDescendants = function() {
+            if (selectedNode) {
+                const descendants = selectedNode.successors();
+                descendants.select();
+            }
+            contextMenu.style.display = 'none';
+        };
+
+        // Main menu actions
+
+        // Export graph
+        document.querySelectorAll('.export-option').forEach(item => {
+            item.addEventListener('click', e => {
+                e.preventDefault(); // stop link navigation
+
+                const format = e.target.dataset.format;
+
+                switch(format) {
+                    case 'png':
+                        const pngData = cy.png({full: true, scale: 2});
+                        const link = document.createElement('a');
+                        link.href = pngData;
+                        link.download = 'graph.png';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        break;
+
+                    case 'jpeg':
+                        const jpegData = cy.jpeg({full: true, scale: 2, quality: 0.9});
+                        const linkJpeg = document.createElement('a');
+                        linkJpeg.href = jpegData;
+                        linkJpeg.download = 'graph.jpeg';
+                        document.body.appendChild(linkJpeg);
+                        linkJpeg.click();
+                        document.body.removeChild(linkJpeg);
+                        break;
+                }
+            });
+        });
+
+        // Layout change
+        document.querySelectorAll('.layout-option').forEach(item => {
+        item.addEventListener('click', e => {
+            e.preventDefault(); // stop link navigation
+
+            const layoutName = e.target.dataset.layout;
+
+            cy.layout({
+                name: layoutName,
+                directed: true,
+                padding: 10
+            }).run();
+        });
+        });
+
+        // Show/hide nodes
+        document.querySelectorAll('.show-hide-option').forEach(item => {
+            item.addEventListener('click', e => {
+                e.preventDefault(); // stop link navigation
+                
+                const action = e.target.dataset.action;
+                
+                switch(action) {
+                    case 'hide-unselected':
+                        // Hide all nodes that are not selected
+                        cy.nodes(':unselected').style('display', 'none');
+                        // Also hide edges connected to hidden nodes
+                        cy.nodes(':unselected').connectedEdges().style('display', 'none');
+                        break;
+                        
+                    case 'hide-selected':
+                        // Hide all selected nodes
+                        cy.nodes(':selected').style('display', 'none');
+                        // Also hide edges connected to hidden nodes
+                        cy.nodes(':selected').connectedEdges().style('display', 'none');
+                        break;
+                        
+                    case 'show-all':
+                        // Show all nodes and edges
+                        cy.nodes().style('display', 'element');
+                        cy.edges().style('display', 'element');
+                        break;
+
+                    case 'hide-labels':
+                    
+                        labelsVisible = !labelsVisible;
+
+                        cy.style()
+                        .selector('node')
+                        .style({
+                            'label': labelsVisible ? 'data(short_label)' : ''
+                        })
+                        .update();
+
+                        break;
+                }
+            });
+        });
+
+
+    });
+
+</script>
+
+{% endblock %}

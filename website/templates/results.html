@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block head %}
+<title>Enrichment Results</title>
+{% endblock %}
+
+{% block body %}
+<h1>Enrichment Analysis Results</h1>
+<p>Analysed leaves: {{results.study_set}}</p>
+<p>Removed nodes: {{results.removed_nodes}}</p> 
+
+<a href="{{url_for('graph')}}" 
+   style="display:inline-block; padding:8px 16px; margin-top:20px; 
+          background:#8d0f83; color: white; text-decoration:none; 
+          border-radius:4px;">
+    View Graph
+</a>
+
+<a href="/" 
+   style="display:inline-block; padding:8px 16px; margin-top:20px; 
+          background:#0f808d; color: white; text-decoration:none; 
+          border-radius:4px;">
+    Back to homepage
+</a>
+
+
+
+<h2>Enrichment results:</h2>
+<table border="1" cellpadding="10" cellspacing="0">
+    <thead>
+        <tr>
+            <th>Class</th>
+            <th>Raw p-value</th>
+            <th>Corrected p-value</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in results.enrichment_results.values() %}
+        <tr>
+            <td>{{ item.class }}</td>
+            <td>{{ "%.4e"|format(item.p_value) }}</td>
+            <td>
+                {% if item.get('p_value_corrected')%}
+                    {{ "%.4e"|format(item.p_value_corrected) }}
+                {% else %}
+                    N/A
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+
+</table>
+
+{% endblock %}
