@@ -19,6 +19,8 @@ def submission():
     if request.method == 'POST':
         study_set = request.form.get('study_set')
         session['study_set'] = study_set # Store the study set in session
+        classification = request.form.get('classification')
+        session['classification'] = classification # Store classification in session
         return render_template('submission.html', user_study_set=study_set)
     
     return render_template('submission.html', user_study_set=None)
@@ -75,7 +77,9 @@ def run_analysis():
                                        root_children_prune=root_children_prune,levels=levels,
                                        linear_branch_prune=linear_branch_prune, n=linear_branch_n,
                                        high_p_value_prune=high_p_value_prune, p_value_threshold=p_value_threshold,
-                                       zero_degree_prune=zero_degree_prune)
+                                       zero_degree_prune=zero_degree_prune,
+                                       classification=session.get('classification'))
+                                       
     # Save JSON representation of pruned_G in session for graph visualization
     graph_json_file = 'website/static/data/graph.json'
     graph_to_cytospace_json(pruned_G, graph_json_file, results)

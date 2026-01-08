@@ -90,6 +90,9 @@ def get_n_ss_annotated(studyset_leaves, class_to_check, map_file):
 
 def get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map_file, check_leaf_classes = False):
 
+    print("DEBUGGING")
+    print(f"classification: {classification}")
+
     #n_bg_leaves and n_ss_leaves will be the same for all classes
     n_bg_leaves = count_removed_leaves(removed_leaves_csv, classification)
     n_ss_leaves = len(studyset_leaves)
@@ -287,7 +290,7 @@ def run_enrichment_analysis(studyset_list,
 if __name__ == "__main__":
 
     bonferroni_correct = False
-    benjamini_hochberg_correct = False # Used in Binche1
+    benjamini_hochberg_correct = True # Used in Binche1
 
     root_children_prune = True
     levels = 2 # Number of levels to prune from root. 1 only prunes root and it's direct neighbour, and so on.
@@ -311,8 +314,9 @@ if __name__ == "__main__":
     # studyset_list = ["http://purl.obolibrary.org/obo/CHEBI_77030","http://purl.obolibrary.org/obo/CHEBI_79036"]
     # studyset_list = ["http://purl.obolibrary.org/obo/CHEBI_77030"] 
     # Problem "Warning: p-value for node http://purl.obolibrary.org/obo/CHEBI_36357 not found. Assuming high p-value." Not found because it was removed in root children pruner but whyyy is it still in the graph???" Inte kollat om fixat!!!!!!!!!!!!!!!!!!!
-    # studyset_list =["http://purl.obolibrary.org/obo/CHEBI_17234"]
-    studyset_list =["http://purl.obolibrary.org/obo/CHEBI_37626"]
+    #studyset_list =["http://purl.obolibrary.org/obo/CHEBI_17234"]
+    # studyset_list =["http://purl.obolibrary.org/obo/CHEBI_37626"]
+    studyset_list =["http://purl.obolibrary.org/obo/CHEBI_77030"]
 
     results = run_enrichment_analysis(studyset_list,
                             bonferroni_correct=bonferroni_correct,
@@ -325,7 +329,8 @@ if __name__ == "__main__":
                             p_value_threshold=p_value_threshold,
                             zero_degree_prune=zero_degree_prune,
                             classification=classification,
-                            check_leaf_classes=check_leaf_classes)
+                            check_leaf_classes=check_leaf_classes
+                            )
     
-    print("Final results:")
+    # print("Final results:")
     # print(results)
