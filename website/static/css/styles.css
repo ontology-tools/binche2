@@ -173,7 +173,7 @@ button
 .popup .popuptext {
     visibility: hidden;
     min-width: 160px;  /* Minimum width */
-    max-width: 360px;  /* Maximum width */
+    max-width: 400px;  /* Maximum width */
     width: max-content;  /* Auto-size to content */
     background-color: rgb(232, 232, 232);
     color: black;

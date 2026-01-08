@@ -55,6 +55,7 @@
                 <a href="#" class="show-hide-option" data-action="hide-selected">Hide selected</a>
                 <a href="#" class="show-hide-option" data-action="show-all">Show all nodes</a>
                 <a href="#" class="show-hide-option" data-action="hide-labels">Hide/Show labels</a>
+                <a href="#" class="show-hide-option" data-action="hide-non-significant">Hide non-significant nodes</a>
             </div>
         </div>
 
@@ -123,7 +124,7 @@
     <div id="cy"></div>
 
     <div id="color-legend">
-    <h4>Significance</h4>
+    <h3>Significance</h3>
     <div class="legend-container">
         <div class="legend-gradient"></div>
         <div class="legend-labels">
@@ -131,6 +132,7 @@
             <span id="legend-max">High</span>
         </div>
     </div>
+    <h5>p-value (−log₁₀ scale)</h5>
 
 </div>
 </div>
@@ -218,7 +220,7 @@
 
 
         cy.nodes().forEach(node =>{
-            const p = node.data('p_value_corrected') || node.data('p_value'); // Use corrected p-value if available, else raw p-value
+            const p = node.data('p_value_corrected') ?? node.data('p_value'); // Use corrected p-value if available, else raw p-value
             if (p != null && p > 0) {
                 const exp = -Math.log10(p);
                 if (exp > maxExponent) maxExponent = exp;
@@ -263,6 +265,7 @@
             if (p != null && p > 0) {
                 const exponent = -Math.log10(p);
                 let t = exponent / maxExponent;
+                t = 1 - t; // Invert t so that low p-values are high t
                 t = Math.max(0, Math.min(1, t)); // Clamp t between 0 and 1
 
                 color = interpolateColor(colorLow, colorHigh, t);
@@ -443,6 +446,18 @@
                         })
                         .update();
 
+                        break;
+
+                    case 'hide-non-significant':
+                        // Hide nodes with p-value (corrected if available) above 0.05
+                        cy.nodes().forEach(node => {
+                            const p = node.data('p_value_corrected') ?? node.data('p_value');
+                            if (p != null && p > 0.05) {
+                                node.style('display', 'none');
+                                // Also hide connected edges
+                                node.connectedEdges().style('display', 'none');
+                            }
+                        });
                         break;
                 }
             });
