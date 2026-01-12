@@ -63,9 +63,24 @@
             <div class="popup" onclick="adjustPruning()">Pruning
                 <span class="popuptext" id="pruningPopup" onclick="event.stopPropagation()">
                     <form action = "/run_analysis" method = "POST">
+
+                        <h3>Change correction method and pruning:</h3>
+                        
+                        <!-- LOOPING PRUNING METHOD -->
+                         <label> 
+                             <input type = "radio" name = "looping_prune_method" value = "plain_enrich" 
+                             {% if pruning.get('method') == 'plain_enrich' %} checked {% endif %} required>
+                             Plain enrichment pruning strategy <br>
+                                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<small>(no further selections needed)</small>
+                         </label><br></br>
+                        <label>
+                            <input type = "radio" name = "looping_prune_method" value = "no_loop_prune"
+                            {% if pruning.get('method') == 'custom' %} checked {% endif %}>
+                            No looping pruning <br>
+                                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<small>(customise pruning options below)</small>
+                        </label><br></br>
                         
                         <!-- P-VALUE CORRECTION METHOD -->
-                         <h3>Change correction method and pruning:</h3>
                         <label for="p_value_correction_method">P-value correction method:</label> 
                         <select name ="p_value_correction_method" id="p_value_correction_method">
                             <option value="benjamini_hochberg" {% if correction_method.get('benjamini_hochberg_correct') %} selected {% endif %}>Benjamini-Hochberg</option>

@@ -10,7 +10,18 @@
     <h2>You submitted:</h2>
     <p>{{ user_study_set }}</p>
 
+    <h2>Either choose an existing looping pruning method or configure pruning options below.</h3>
+
     <form action = "/run_analysis" method = "POST">
+        <!-- LOOPING PRUNING METHOD -->
+        <label> 
+            <input type = "radio" name = "looping_prune_method" value = "plain_enrich" required>
+            Plain enrichment pruning strategy (no further selections needed)
+        </label><br></br>
+        <label>
+            <input type = "radio" name = "looping_prune_method" value = "no_loop_prune">
+            No looping pruning (customise pruning options below)
+        </label><br></br>
 
         <!-- P-VALUE CORRECTION METHOD -->
          <h3>Choose p-value correction method:</h3><br>
@@ -28,7 +39,7 @@
             <input type="checkbox" name="root_children_prune" value="true"> 
             Root-children pruning
         </label><br>
-        Levels:
+        Levels (levels to prune including root):
         <input type="number" name="levels" value="2" min="0">
         <br><br>
 

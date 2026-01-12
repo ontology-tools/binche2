@@ -24,6 +24,18 @@ table = [[a, b], [c, d]]
 # n_bg_leaves = total number of leaf classes in the background set (the ones filtered out as leaves from the ontology)   
 # n_bg_annotated = number of those leaf classes that are descendants of the given class)
 
+
+"""
+                    In Class     Not in Class
+Study Set              a             b
+Background (rest)      c             d
+
+a = study compounds annotated to this class
+b = study compounds NOT annotated to this class
+c = background compounds in this class (excluding study set)
+d = background compounds not in this class (excluding study set)
+"""
+
 def calculate_p_value(n_ss_annotated, n_ss_leaves, n_bg_annotated, n_bg_leaves):
     a = n_ss_annotated
     b = n_ss_leaves - n_ss_annotated
@@ -89,9 +101,6 @@ def get_n_ss_annotated(studyset_leaves, class_to_check, map_file):
     return n_ss_annotated
 
 def get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map_file, check_leaf_classes = False):
-
-    print("DEBUGGING")
-    print(f"classification: {classification}")
 
     #n_bg_leaves and n_ss_leaves will be the same for all classes
     n_bg_leaves = count_removed_leaves(removed_leaves_csv, classification)
@@ -178,8 +187,6 @@ def run_enrichment_analysis(studyset_list,
     all_removed_nodes = set()
 
     if pruning_before_enrichment:
-        # Currently the whole ontology has to load for pruning to work. Very slow.
-        # TODO: solve this issue.
 
         if root_children_prune:
             print(f"studyset_leaves: {studyset_leaves}")
@@ -223,7 +230,7 @@ def run_enrichment_analysis(studyset_list,
         print("Enrichment results after Benjamini-Hochberg correction:")
         print_enrichment_results(enrichment_results)
 
-    if high_p_value_prune: # Uses corrected p-values if Bonferroni correction was applied
+    if high_p_value_prune: # Uses corrected p-values if correction was applied
         print(f"High p-value pruner activated, pruning nodes with p-value above {p_value_threshold}")
         if pruned_G is None:
             print("Creating new graph for high p-value pruning (no prior pruning applied)")
@@ -281,6 +288,120 @@ def run_enrichment_analysis(studyset_list,
     }
     return results, pruned_G
 
+####################################
+# Combine pruning strategies
+####################################
+
+# Plain Enrichment Pruning Strategy: For the pre-loop phase this strategy applies the High Value Branch Pruner (0.05), 
+# the Linear Branch Collapser Pruner, and the Root Children Pruner (3 (change to 2) levels, without repetition). 
+# During the loop phase,
+# this strategy applies the Molecule Leaves Pruner, the High P-Value Branch Pruner (0.05), the Linear Branch Collapser Pruner,
+# and the Zero Degree Vertex Pruner. No pruners are applied in the final phase post-loop.
+
+def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
+                            levels=2, # for root children pruner
+                            n=2, # for linear branch pruner
+                            p_value_threshold=0.05, # for high p-value pruner
+                            classification="structural",
+                            check_leaf_classes=False):
+
+    # Files
+    removed_leaves_csv = "data/removed_leaf_classes_with_smiles.csv"
+    leaf_to_ancestors_map_file = "data/removed_leaf_classes_to_ALL_parents_map.json"
+    class_to_leaf_map_file = "data/class_to_leaf_descendants_map.json"
+    parent_map_file = "data/chebi_parent_map.json"
+
+    color_map = ['#FFB6C1', "#F44280", "#AA83A7", "#83163A", "#E63FE6", '#FFA07A', '#FF69B4'] # not atcually used, should be fixed in function create_graph_from_map
+
+    if not studyset_list[0].startswith("http://purl.obolibrary.org/obo/"):
+        studyset_list = [f"http://purl.obolibrary.org/obo/{cls}" for cls in studyset_list]
+
+    studyset_leaves = get_leaves(studyset_list, removed_leaves_csv, class_to_leaf_map_file)
+    print(f"Study set leaves: {studyset_leaves}")
+
+    studyset_ancestors = get_ancestors_for_inputs(studyset_leaves, leaf_to_ancestors_map_file)
+    print(f"Study set ancestors: {studyset_ancestors}")
+    print(f"Number of study set ancestors: {len(studyset_ancestors)}")
+
+    all_removed_nodes = set()
+
+    enrichment_results = get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map_file, check_leaf_classes)
+
+    print("Enrichment results:")
+    print_enrichment_results(enrichment_results)
+
+    enrichment_results = benjamini_hochberg_fdr_correction(enrichment_results)
+    print("Enrichment results after Benjamini-Hochberg correction:")
+    print_enrichment_results(enrichment_results)
+
+    pre_pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, color_map, max_n_leaf_classes=inf)
+    G = pre_pruned_G.copy()
+
+    ## Pre-loop phase ##
+    print("Starting pre-loop pruning phase.")
+    G, removed_nodes = high_p_value_branch_pruner(G, enrichment_results, p_value_threshold)
+    all_removed_nodes.update(removed_nodes)
+
+    G, removed_nodes = linear_branch_collapser_pruner_remove_less(G, n)
+    all_removed_nodes.update(removed_nodes)
+
+    G, removed_nodes, execution_count = root_children_pruner(G, levels, allow_re_execution = False, execution_count = 0)
+    all_removed_nodes.update(removed_nodes)
+
+
+    ## Loop phase ##
+    print("Starting loop pruning phase.")
+    # Count the number of nodes in G so it can be compared after each iteration
+    size_before = G.number_of_nodes()
+    size_after = size_before
+    first_iteration = True
+    iteration = 0
+
+    # while the size changes, keep applying the loop phase pruners
+    while size_after < size_before or first_iteration:
+        size_before = size_after
+        iteration += 1
+        print(f"Loop iteration {iteration}")
+
+        ## Recalculate corrected p-values
+
+        # Remove pruned nodes from enrichment results
+        current_enrichment = {
+            cls: vals for cls, vals in enrichment_results.items()
+            if cls not in all_removed_nodes and G.has_node(cls)
+        }
+
+        current_enrichment = benjamini_hochberg_fdr_correction(current_enrichment)
+
+        # TODO: Molecule Leaves Pruner to be implemented, if needed. Do not understand why this is in the loop phase.
+        
+        G, removed_nodes = high_p_value_branch_pruner(G, current_enrichment, p_value_threshold)
+        all_removed_nodes.update(removed_nodes)
+
+        # not including since we do not want to remove too many nodes
+        # G, removed_nodes = linear_branch_collapser_pruner_remove_less(G, n)
+        # all_removed_nodes.update(removed_nodes)
+
+        G, removed_nodes = zero_degree_pruner(G)
+        all_removed_nodes.update(removed_nodes)
+
+        size_after = G.number_of_nodes()
+        first_iteration = False
+
+    ## No final phase pruners ##
+    final_enrichment = current_enrichment
+
+    print(f"Number of removed nodes in total: {len(all_removed_nodes)}")
+    results = {
+        "study_set": [id_to_name(c) for c in studyset_leaves],
+        "removed_nodes": [id_to_name(c) for c in all_removed_nodes],
+        "enrichment_results": {id_to_name(cls): vals for cls, vals in final_enrichment.items()}
+    }
+
+    return results, G
+
+
+
 # OBS: in Binche1, this would be the input (adapt code to follow this?):
 
 # String ontologyFile = binchePrefs.get(BiNChEOntologyPrefs.RoleAndStructOntology.name(), null);
@@ -293,18 +414,18 @@ if __name__ == "__main__":
     benjamini_hochberg_correct = True # Used in Binche1
 
     root_children_prune = True
-    levels = 2 # Number of levels to prune from root. 1 only prunes root and it's direct neighbour, and so on.
+    levels = 2 # Number of levels to prune including root. 1 only prunes root, 2 prunes root and it's direct neighbour, and so on.
     # allow_re_execution = False  # Currently not necessary. Whether the pruner can be executed multiple times on a given graph.
     # execution_count = 0  # Currently not necessary. Counter for the number of executions
 
-    linear_branch_prune = False
+    linear_branch_prune = True
     n = 2 # Keep only every n-th node in linear branches
     # TODO: implement
 
-    high_p_value_prune = False
+    high_p_value_prune = True
     p_value_threshold = 0.05
 
-    zero_degree_prune = False
+    zero_degree_prune = True
 
 
     classification = "structural" # "functional" or "structural" or "full"
@@ -318,19 +439,28 @@ if __name__ == "__main__":
     # studyset_list =["http://purl.obolibrary.org/obo/CHEBI_37626"]
     studyset_list =["http://purl.obolibrary.org/obo/CHEBI_77030"]
 
-    results = run_enrichment_analysis(studyset_list,
-                            bonferroni_correct=bonferroni_correct,
-                            benjamini_hochberg_correct=benjamini_hochberg_correct,
-                            root_children_prune=root_children_prune,
-                            levels=levels,
-                            linear_branch_prune=linear_branch_prune,
-                            n=n,
-                            high_p_value_prune=high_p_value_prune,
-                            p_value_threshold=p_value_threshold,
-                            zero_degree_prune=zero_degree_prune,
-                            classification=classification,
-                            check_leaf_classes=check_leaf_classes
-                            )
+    # results = run_enrichment_analysis(studyset_list,
+    #                         bonferroni_correct=bonferroni_correct,
+    #                         benjamini_hochberg_correct=benjamini_hochberg_correct,
+    #                         root_children_prune=root_children_prune,
+    #                         levels=levels,
+    #                         linear_branch_prune=linear_branch_prune,
+    #                         n=n,
+    #                         high_p_value_prune=high_p_value_prune,
+    #                         p_value_threshold=p_value_threshold,
+    #                         zero_degree_prune=zero_degree_prune,
+    #                         classification=classification,
+    #                         check_leaf_classes=check_leaf_classes
+    #                         )
+
+    run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
+                            levels=2, # for root children pruner
+                            n=2, # for linear branch pruner
+                            p_value_threshold=0.05, # for high p-value pruner
+                            classification="structural",
+                            check_leaf_classes=False)
+
+    
     
     # print("Final results:")
     # print(results)

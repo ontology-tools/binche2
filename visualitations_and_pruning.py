@@ -276,6 +276,7 @@ def root_children_pruner(G, levels, allow_re_execution = False, execution_count 
             delete_children(root, G, levels, removed_nodes)
         execution_count += 1
     return G, removed_nodes, execution_count
+#TODO: look over if execution count and allow_re_execution is needed anywhere
 
 
 """Linear branch collapser pruner - remove fewer nodes:
@@ -352,57 +353,6 @@ def linear_branch_collapser_pruner_remove_less(G, n):
         for child in direct_children:
             process_branch_remove_less(root, child, G, n, removed_nodes)
     return G, removed_nodes
-
-
-
-# # old version with bugs
-# def process_branch_remove_less_old(head, node, G, n):
-
-#     branch_nodes = []
-#     current_node = node
-
-#     children = list(G.predecessors(current_node))
-
-#     while len(children) == 1:
-#         branch_nodes.append(current_node)
-#         current_node = children[0]
-#         children = list(G.predecessors(current_node))
-#         print(f"Current node: {current_node}, Children: {children}")
-
-#     last_node = current_node
-#     # Capture children BEFORE modifying the graph
-#     children_before = list(G.predecessors(last_node))   
-
-#     if len(branch_nodes):
-#         # Keep every n:th node in the branch
-#         i = 0
-#         nodes_to_keep = [head]
-        
-#         for node in branch_nodes:
-#             i += 1
-#             if i % n == 0:
-#                 nodes_to_keep.append(node)
-
-#         nodes_to_keep.append(last_node)
-#         print(f"Nodes to keep in branch: {nodes_to_keep}")
-
-#         for node in branch_nodes:
-#             if node not in nodes_to_keep:
-#                 G.remove_node(node)
-
-#         for i in range(len(nodes_to_keep)-1):
-#             if not G.has_edge(nodes_to_keep[i+1], nodes_to_keep[i]):
-#                 G.add_edge(nodes_to_keep[i+1], nodes_to_keep[i])
-
-#                 print(f"Node {nodes_to_keep[i+1]} connected to {nodes_to_keep[i]}")
-
-
-#     # Recurse only over the original children (before graph modification)
-#     for child in children_before:                       
-#         process_branch_remove_less(last_node, child, G, n)
-
-
-#     return G
 
 
 """High P-Value Branch Pruner: 
@@ -482,6 +432,63 @@ def zero_degree_pruner(G):
         removed.append(node)
 
     return G, removed
+
+####################################
+# Combine pruning strategies
+####################################
+
+# Plain Enrichment Pruning Strategy: For the pre-loop phase this strategy applies the High Value Branch Pruner (0.05), 
+# the Linear Branch Collapser Pruner, and the Root Children Pruner (3 (change to 2) levels, without repetition). 
+# During the loop phase,
+# this strategy applies the Molecule Leaves Pruner, the High P-Value Branch Pruner (0.05), the Linear Branch Collapser Pruner,
+# and the Zero Degree Vertex Pruner. No pruners are applied in the final phase post-loop.
+
+def plain_enrich_pruning_strategy(G, p_value_dict, p_value_threshold=0.05, n=2, levels=2):
+    all_removed_nodes = set()
+
+    ## Pre-loop phase ##
+    G, removed_nodes = high_value_branch_pruner(G, p_value_dict, p_value_threshold)
+    all_removed_nodes.update(removed_nodes)
+
+    G, removed_nodes = linear_branch_collapser_pruner_remove_less(G, n)
+    all_removed_nodes.update(removed_nodes)
+
+    G, removed_nodes, _ = root_children_pruner(G, levels, allow_re_execution=False)
+    all_removed_nodes.update(removed_nodes)
+
+    ## Loop phase ##
+    # Count the number if node in G so can be compared after each iteration
+    size_before = G.number_of_nodes()
+    size_after = size_before
+    first_iteration = True
+
+    # while the size changes, keep applying the loop phase pruners
+    while size_after < size_before or first_iteration:
+        size_before = size_after
+
+        # TODO: Molecule Leaves Pruner to be implemented, if needed
+        
+        G, removed_nodes = high_p_value_branch_pruner(G, p_value_dict, p_value_threshold)
+        all_removed_nodes.update(removed_nodes)
+
+        G, removed_nodes = linear_branch_collapser_pruner_remove_less(G, n)
+        all_removed_nodes.update(removed_nodes)
+
+        G, removed_nodes = zero_degree_pruner(G)
+        all_removed_nodes.update(removed_nodes)
+
+        size_after = G.number_of_nodes()
+        first_iteration = False
+
+    ## No final phase pruners ##
+
+    return G, all_removed_nodes
+
+
+
+
+
+
 
 #####################################
 # Converting NetworkX graph to Cytoscape compatible format
