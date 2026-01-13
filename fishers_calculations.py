@@ -7,6 +7,7 @@ import math
 from visualitations_and_pruning import root_children_pruner, linear_branch_collapser_pruner_remove_less, high_p_value_branch_pruner, zero_degree_pruner, create_graph_from_map, id_to_name
 from pre_fishers_calculations import count_removed_classes_for_class, count_removed_leaves
 from multiple_test_corrections import bonferroni_correction, benjamini_hochberg_fdr_correction
+import time
 
 """
 from goat-tools:
@@ -45,13 +46,11 @@ def calculate_p_value(n_ss_annotated, n_ss_leaves, n_bg_annotated, n_bg_leaves):
     # ‘greater’: the odds ratio of the underlying population is greater than one
     return odds, p
 
-def get_leaves(studyset_list, leaves_csv, class_to_leaf_map_json):
+def get_leaves(studyset_list, leaves_csv, class_to_leaf_map):
     studyset_leaves = set()
 
     leaves_df = pd.read_csv(leaves_csv)
     print(leaves_df['IRI'].iloc[0].encode())
-    with open(class_to_leaf_map_json, 'r') as f:
-        class_to_leaf_map = json.load(f)
     
     for cls in studyset_list:
         print(f"Processing class {cls}...")
@@ -79,7 +78,7 @@ def get_ancestors_for_inputs(studyset_leaves, leaf_to_all_parents_map_json):
     return studyset_ancestors
 
 
-def get_n_ss_annotated(studyset_leaves, class_to_check, map_file):
+def get_n_ss_annotated(studyset_leaves, class_to_check, class_to_leaf_map):
     """
     n_ss_annotated = number of input classes that are leaf descendants of the given class.
 
@@ -87,10 +86,6 @@ def get_n_ss_annotated(studyset_leaves, class_to_check, map_file):
     class_to_check: the ontology class for which we want n_ss_annotated
     map_file: JSON file mapping each class to all its leaf descendants
     """
-
-    # load mapping: {class: [list_of_leaf_descendants]}
-    with open(map_file, 'r') as f:
-        class_to_leaf_map = json.load(f)
 
     # descendants of the class we are calculating enrichment for
     leaf_descendants = set(class_to_leaf_map.get(class_to_check, []))
@@ -100,7 +95,7 @@ def get_n_ss_annotated(studyset_leaves, class_to_check, map_file):
 
     return n_ss_annotated
 
-def get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map_file, check_leaf_classes = False):
+def get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map, check_leaf_classes = False):
 
     #n_bg_leaves and n_ss_leaves will be the same for all classes
     n_bg_leaves = count_removed_leaves(removed_leaves_csv, classification)
@@ -112,8 +107,8 @@ def get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, s
 
         # print(f"Calculating enrichment for class {class_to_check}...")
 
-        _, n_bg_annotated = count_removed_classes_for_class(class_to_check, class_to_leaf_map_file, classification, check_leaf_classes, removed_leaves_csv)
-        n_ss_annotated = get_n_ss_annotated(studyset_leaves, class_to_check, class_to_leaf_map_file)
+        _, n_bg_annotated = count_removed_classes_for_class(class_to_check, class_to_leaf_map, classification, check_leaf_classes, removed_leaves_csv)
+        n_ss_annotated = get_n_ss_annotated(studyset_leaves, class_to_check, class_to_leaf_map)
 
         odds, p_value = calculate_p_value(n_ss_annotated, n_ss_leaves, n_bg_annotated, n_bg_leaves)
 
@@ -164,7 +159,6 @@ def run_enrichment_analysis(studyset_list,
                             check_leaf_classes=False):
 
     pruning_before_enrichment = root_children_prune or linear_branch_prune # add other pruning strategies when implemented
-    color_map = ['#FFB6C1', "#F44280", "#AA83A7", "#83163A", "#E63FE6", '#FFA07A', '#FF69B4'] 
 
     # Files
     removed_leaves_csv = "data/removed_leaf_classes_with_smiles.csv"
@@ -172,15 +166,25 @@ def run_enrichment_analysis(studyset_list,
     class_to_leaf_map_file = "data/class_to_leaf_descendants_map.json"
     parent_map_file = "data/chebi_parent_map.json"
 
-    # Currently the code is working with the whole chebi iri needed. Make sure the input study set is in the same format:
+    with open(class_to_leaf_map_file, 'r') as f:
+        class_to_leaf_map = json.load(f)
+
+    # Currently the code is working with the whole chebi iri needed. Make sure the input study set is in the same format (fixed for the website)
     if not studyset_list[0].startswith("http://purl.obolibrary.org/obo/"):
         studyset_list = [f"http://purl.obolibrary.org/obo/{cls}" for cls in studyset_list]
 
-    studyset_leaves = get_leaves(studyset_list, removed_leaves_csv, class_to_leaf_map_file)
-    print(f"Study set leaves: {studyset_leaves}")
+    time_start_total = time.time()
+    studyset_leaves = get_leaves(studyset_list, removed_leaves_csv, class_to_leaf_map)
+    #print(f"Study set leaves: {studyset_leaves}")
+    time_end_total = time.time()
+    print(f"Total time to get study set leaves: {time_end_total - time_start_total} seconds")
 
+    time_start_total = time.time()
     studyset_ancestors_all = get_ancestors_for_inputs(studyset_leaves, leaf_to_ancestors_map_file)
-    print(f"Study set ancestors: {studyset_ancestors_all}")
+    time_end_total = time.time()
+    print(f"Total time to get study set ancestors: {time_end_total - time_start_total} seconds")
+
+    # print(f"Study set ancestors: {studyset_ancestors_all}")
     print(f"Number of study set ancestors: {len(studyset_ancestors_all)}")
 
     pruned_G = None
@@ -191,21 +195,31 @@ def run_enrichment_analysis(studyset_list,
         if root_children_prune:
             print(f"studyset_leaves: {studyset_leaves}")
             print(f"Root children pruner activated, pruning {levels} levels from root")
-            G = create_graph_from_map(studyset_leaves, parent_map_file, color_map, max_n_leaf_classes=inf)
+            # Time to create the graph
+            time_start = time.time()
+            G = create_graph_from_map(studyset_leaves, parent_map_file, max_n_leaf_classes=inf)
+            time_end = time.time()
+            print(f"Graph creation time: {time_end - time_start} seconds")
             # draw_graph(G, graphing_layout="default", title="Graph")
             pruned_G = G.copy()
+            time_start_total = time.time()
             pruned_G, removed_nodes, execution_count = root_children_pruner(pruned_G, levels, allow_re_execution = False, execution_count = 0)
-            print(f"Removed nodes by root children pruner: {removed_nodes}")
+            time_end_total = time.time()
+            print(f"Total time for root children pruning: {time_end_total - time_start_total} seconds")
+            # print(f"Removed nodes by root children pruner: {removed_nodes}")
             all_removed_nodes.update(removed_nodes)
 
+        time_start_total = time.time()
         if linear_branch_prune:
             print(f"Linear branch pruner activated, keeping only every {n}-th node in linear branches")
             if pruned_G is None:
-                pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, color_map, max_n_leaf_classes=inf)
+                pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, max_n_leaf_classes=inf)
             
             pruned_G, removed_nodes = linear_branch_collapser_pruner_remove_less(pruned_G, n)
-            print(f"Removed nodes by linear branch pruner: {removed_nodes}")
+            # print(f"Removed nodes by linear branch pruner: {removed_nodes}")
             all_removed_nodes.update(removed_nodes)
+        time_end_total = time.time()
+        print(f"Total time for linear branch pruning: {time_end_total - time_start_total} seconds")
 
         # Remove pruned nodes from studyset_ancestors_all
         studyset_ancestors = [cls for cls in studyset_ancestors_all if cls not in all_removed_nodes]
@@ -214,32 +228,41 @@ def run_enrichment_analysis(studyset_list,
     else:
         studyset_ancestors = studyset_ancestors_all
 
-    enrichment_results = get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map_file, check_leaf_classes)
+    time_start_total = time.time()
+    enrichment_results = get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map, check_leaf_classes)
+    time_end_total = time.time()
+    print(f"Total time to get enrichment values: {time_end_total - time_start_total} seconds")
 
-    print("Enrichment results:")
-    print_enrichment_results(enrichment_results)
+    #print("Enrichment results:")
+    #print_enrichment_results(enrichment_results)
 
+    time_start_total = time.time()
     if bonferroni_correct:
         print("Applying Bonferroni correction to p-values...")
         enrichment_results, correction_map = bonferroni_correction(enrichment_results)
-        print("Enrichment results after Bonferroni correction:")
-        print_enrichment_results(enrichment_results)
+        # print("Enrichment results after Bonferroni correction:")
+        # print_enrichment_results(enrichment_results)
     elif benjamini_hochberg_correct:
         print("Applying Benjamini-Hochberg FDR correction to p-values...")
         enrichment_results = benjamini_hochberg_fdr_correction(enrichment_results)
-        print("Enrichment results after Benjamini-Hochberg correction:")
-        print_enrichment_results(enrichment_results)
+        # print("Enrichment results after Benjamini-Hochberg correction:")
+        # print_enrichment_results(enrichment_results)
+    time_end_total = time.time()
+    print(f"Total time for multiple testing correction: {time_end_total - time_start_total} seconds")
 
     if high_p_value_prune: # Uses corrected p-values if correction was applied
         print(f"High p-value pruner activated, pruning nodes with p-value above {p_value_threshold}")
         if pruned_G is None:
             print("Creating new graph for high p-value pruning (no prior pruning applied)")
-            pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, color_map, max_n_leaf_classes=inf)
+            pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, max_n_leaf_classes=inf)
         else:
             print("Using previously pruned graph for high p-value pruning")
 
+        time_start_total = time.time()
         pruned_G, removed_nodes = high_p_value_branch_pruner(pruned_G, enrichment_results, p_value_threshold)
-        print(f"Removed nodes by high p-value pruner: {removed_nodes}")
+        time_end_total = time.time()
+        print(f"Total time for high p-value pruning: {time_end_total - time_start_total} seconds")
+        # print(f"Removed nodes by high p-value pruner: {removed_nodes}")
         print(f"Number of pruned nodes: {len(removed_nodes)}")
 
         # update all_removed_nodes
@@ -250,19 +273,22 @@ def run_enrichment_analysis(studyset_list,
             if cls in enrichment_results:
                 del enrichment_results[cls]
 
-        print("Final enrichment results after high p-value pruning:")
-        print_enrichment_results(enrichment_results)
+        # print("Final enrichment results after high p-value pruning:")
+        # print_enrichment_results(enrichment_results)
 
     if zero_degree_prune:
         print("Applying zero-degree pruner to remove nodes with zero degree...")
         if pruned_G is None:
             print("Creating new graph for zero-degree pruning (no prior pruning applied)")
-            pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, color_map, max_n_leaf_classes=inf)
+            pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, max_n_leaf_classes=inf)
         else:
             print("Using previously pruned graph for zero-degree pruning")
 
+        time_start_total = time.time()
         pruned_G, removed_nodes = zero_degree_pruner(pruned_G)
-        print(f"Removed nodes by zero-degree pruner: {removed_nodes}")
+        time_end_total = time.time()
+        print(f"Total time for zero-degree pruning: {time_end_total - time_start_total} seconds")
+        # print(f"Removed nodes by zero-degree pruner: {removed_nodes}")
         print(f"Number of pruned nodes: {len(removed_nodes)}")
 
         # update all_removed_nodes
@@ -275,11 +301,14 @@ def run_enrichment_analysis(studyset_list,
         
     # Create graph if it does not exist yet
     if pruned_G is None:
-        pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, color_map, max_n_leaf_classes=inf)
+        pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, max_n_leaf_classes=inf)
 
-        print("Final enrichment results after zero-degree pruning:")
-        print_enrichment_results(enrichment_results)
-    
+        # print("Final enrichment results after zero-degree pruning:")
+        # print_enrichment_results(enrichment_results)
+
+    print("Final enrichment results:")
+    print_enrichment_results(enrichment_results)
+       
     print(f"Number of removed nodes in total: {len(all_removed_nodes)}")
     results = {
         "study_set": [id_to_name(c) for c in studyset_leaves],
@@ -311,12 +340,13 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
     class_to_leaf_map_file = "data/class_to_leaf_descendants_map.json"
     parent_map_file = "data/chebi_parent_map.json"
 
-    color_map = ['#FFB6C1', "#F44280", "#AA83A7", "#83163A", "#E63FE6", '#FFA07A', '#FF69B4'] # not atcually used, should be fixed in function create_graph_from_map
+    with open(class_to_leaf_map_file, 'r') as f:
+        class_to_leaf_map = json.load(f)
 
     if not studyset_list[0].startswith("http://purl.obolibrary.org/obo/"):
         studyset_list = [f"http://purl.obolibrary.org/obo/{cls}" for cls in studyset_list]
 
-    studyset_leaves = get_leaves(studyset_list, removed_leaves_csv, class_to_leaf_map_file)
+    studyset_leaves = get_leaves(studyset_list, removed_leaves_csv, class_to_leaf_map)
     print(f"Study set leaves: {studyset_leaves}")
 
     studyset_ancestors = get_ancestors_for_inputs(studyset_leaves, leaf_to_ancestors_map_file)
@@ -325,7 +355,7 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
 
     all_removed_nodes = set()
 
-    enrichment_results = get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map_file, check_leaf_classes)
+    enrichment_results = get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map, check_leaf_classes)
 
     print("Enrichment results:")
     print_enrichment_results(enrichment_results)
@@ -334,7 +364,7 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
     print("Enrichment results after Benjamini-Hochberg correction:")
     print_enrichment_results(enrichment_results)
 
-    pre_pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, color_map, max_n_leaf_classes=inf)
+    pre_pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, max_n_leaf_classes=inf)
     G = pre_pruned_G.copy()
 
     ## Pre-loop phase ##
@@ -420,7 +450,6 @@ if __name__ == "__main__":
 
     linear_branch_prune = True
     n = 2 # Keep only every n-th node in linear branches
-    # TODO: implement
 
     high_p_value_prune = True
     p_value_threshold = 0.05
@@ -439,28 +468,30 @@ if __name__ == "__main__":
     # studyset_list =["http://purl.obolibrary.org/obo/CHEBI_37626"]
     studyset_list =["http://purl.obolibrary.org/obo/CHEBI_77030"]
 
-    # results = run_enrichment_analysis(studyset_list,
-    #                         bonferroni_correct=bonferroni_correct,
-    #                         benjamini_hochberg_correct=benjamini_hochberg_correct,
-    #                         root_children_prune=root_children_prune,
-    #                         levels=levels,
-    #                         linear_branch_prune=linear_branch_prune,
-    #                         n=n,
-    #                         high_p_value_prune=high_p_value_prune,
-    #                         p_value_threshold=p_value_threshold,
-    #                         zero_degree_prune=zero_degree_prune,
-    #                         classification=classification,
-    #                         check_leaf_classes=check_leaf_classes
-    #                         )
+    results = run_enrichment_analysis(studyset_list,
+                            bonferroni_correct=bonferroni_correct,
+                            benjamini_hochberg_correct=benjamini_hochberg_correct,
+                            root_children_prune=root_children_prune,
+                            levels=levels,
+                            linear_branch_prune=linear_branch_prune,
+                            n=n,
+                            high_p_value_prune=high_p_value_prune,
+                            p_value_threshold=p_value_threshold,
+                            zero_degree_prune=zero_degree_prune,
+                            classification=classification,
+                            check_leaf_classes=check_leaf_classes
+                            )
 
-    run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
-                            levels=2, # for root children pruner
-                            n=2, # for linear branch pruner
-                            p_value_threshold=0.05, # for high p-value pruner
-                            classification="structural",
-                            check_leaf_classes=False)
+    # run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
+    #                         levels=2, # for root children pruner
+    #                         n=2, # for linear branch pruner
+    #                         p_value_threshold=0.05, # for high p-value pruner
+    #                         classification="structural",
+    #                         check_leaf_classes=False)
 
     
     
     # print("Final results:")
     # print(results)
+
+    

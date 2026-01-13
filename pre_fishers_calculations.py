@@ -62,12 +62,8 @@ def build_class_to_leaf_map(leaf_to_ancestors_file, class_to_leaf_output_file):
 
     print(f"Saved class to leaf descendants map with {len(class_to_leaf_json)} classes to {class_to_leaf_output_file}.")
     
-def count_removed_classes_for_class(class_iri, map_file, classification, check_leaf_classes = False, removed_classes_csv = None):
+def count_removed_classes_for_class(class_iri, subclass_map, classification, check_leaf_classes = False, removed_classes_csv = None):
     """Count how many classes under the given class_iri were removed in the structural ontology."""
-    
-    # Use json subclass map to get descendants
-    with open(map_file, 'r') as f:
-        subclass_map = json.load(f)
 
     if str(class_iri) not in subclass_map: 
         print(f"⚠️ Class {class_iri} is not found in map file.")

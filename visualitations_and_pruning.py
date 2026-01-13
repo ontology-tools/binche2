@@ -44,11 +44,8 @@ def id_to_name(class_id):
 #     dfs(start_class, [start_class])
 #     return paths
 
-def find_paths_to_root_with_map(parent_map_json_file, start_class):
+def find_paths_to_root_with_map(start_class, parents_map):
     paths = []
-
-    with open(parent_map_json_file, "r") as f:
-        parents_map = json.load(f)
 
     def dfs(current_class, current_path):
         # if the class has no parents in the map, it's a root
@@ -148,6 +145,7 @@ def create_graph_from_paths(paths):
     
     return G
 
+# Not used anymore. If to be used, potentially remove color_map parameter
 def create_graph_from_ontology(classes, classification, color_map = ['#FFB6C1', "#F44280", "#AA83A7", "#83163A", "#E63FE6", '#FFA07A', '#FF69B4'], max_n_leaf_classes=inf):
     G = nx.DiGraph()
     j = 0
@@ -175,22 +173,19 @@ def create_graph_from_ontology(classes, classification, color_map = ['#FFB6C1', 
         print(f"Total number of starting leaf classes processed in graph: {j}")
     return G
 
-def create_graph_from_map(classes, parent_map_json_file,
-                           color_map = ['#FFB6C1', "#F44280", "#AA83A7", "#83163A", "#E63FE6", '#FFA07A', '#FF69B4'],
-                           max_n_leaf_classes=inf):
+def create_graph_from_map(classes, parent_map_json_file, max_n_leaf_classes=inf):
+    
+    with open(parent_map_json_file, "r") as f:
+        parents_map = json.load(f)
+
     G = nx.DiGraph()
     j = 0
 
     for cls in classes:
-        print(f"Adding to graph... Starting node: {cls}")
-        paths = find_paths_to_root_with_map(parent_map_json_file, cls)
+        if j % 10 == 0:
+            print(f"Proceeesing class {j+1}/{len(classes)}")
+        paths = find_paths_to_root_with_map(cls, parents_map)
         H = create_graph_from_paths(paths)
-
-        #Removed since colours will be determined depending on p-value later?
-        # Set node colours of H 
-        # color = color_map[j % len(color_map)]
-        # color_dict = {node: color for node in H.nodes()}
-        # nx.set_node_attributes(H, color_dict, 'color')
 
         # Add labels for Cytospace compatibility
         lable_dict = {node: id_to_name(node) for node in H.nodes()}
@@ -204,6 +199,8 @@ def create_graph_from_map(classes, parent_map_json_file,
 
         print(f"Total number of starting leaf classes processed in graph: {j}")
     return G
+
+
 
 def draw_graph(G, graphing_layout, title):
     if graphing_layout == "default":
@@ -432,57 +429,6 @@ def zero_degree_pruner(G):
         removed.append(node)
 
     return G, removed
-
-####################################
-# Combine pruning strategies
-####################################
-
-# Plain Enrichment Pruning Strategy: For the pre-loop phase this strategy applies the High Value Branch Pruner (0.05), 
-# the Linear Branch Collapser Pruner, and the Root Children Pruner (3 (change to 2) levels, without repetition). 
-# During the loop phase,
-# this strategy applies the Molecule Leaves Pruner, the High P-Value Branch Pruner (0.05), the Linear Branch Collapser Pruner,
-# and the Zero Degree Vertex Pruner. No pruners are applied in the final phase post-loop.
-
-def plain_enrich_pruning_strategy(G, p_value_dict, p_value_threshold=0.05, n=2, levels=2):
-    all_removed_nodes = set()
-
-    ## Pre-loop phase ##
-    G, removed_nodes = high_value_branch_pruner(G, p_value_dict, p_value_threshold)
-    all_removed_nodes.update(removed_nodes)
-
-    G, removed_nodes = linear_branch_collapser_pruner_remove_less(G, n)
-    all_removed_nodes.update(removed_nodes)
-
-    G, removed_nodes, _ = root_children_pruner(G, levels, allow_re_execution=False)
-    all_removed_nodes.update(removed_nodes)
-
-    ## Loop phase ##
-    # Count the number if node in G so can be compared after each iteration
-    size_before = G.number_of_nodes()
-    size_after = size_before
-    first_iteration = True
-
-    # while the size changes, keep applying the loop phase pruners
-    while size_after < size_before or first_iteration:
-        size_before = size_after
-
-        # TODO: Molecule Leaves Pruner to be implemented, if needed
-        
-        G, removed_nodes = high_p_value_branch_pruner(G, p_value_dict, p_value_threshold)
-        all_removed_nodes.update(removed_nodes)
-
-        G, removed_nodes = linear_branch_collapser_pruner_remove_less(G, n)
-        all_removed_nodes.update(removed_nodes)
-
-        G, removed_nodes = zero_degree_pruner(G)
-        all_removed_nodes.update(removed_nodes)
-
-        size_after = G.number_of_nodes()
-        first_iteration = False
-
-    ## No final phase pruners ##
-
-    return G, all_removed_nodes
 
 
 
