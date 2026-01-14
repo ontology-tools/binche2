@@ -187,7 +187,14 @@ def run_enrichment_analysis(studyset_list,
     # print(f"Study set ancestors: {studyset_ancestors_all}")
     print(f"Number of study set ancestors: {len(studyset_ancestors_all)}")
 
-    pruned_G = None
+    # Time to create the graph
+    time_start = time.time()
+    G = create_graph_from_map(studyset_leaves, parent_map_file, max_n_leaf_classes=inf)
+    time_end = time.time()
+    print(f"Graph creation time: {time_end - time_start} seconds")
+    pruned_G = G.copy()
+
+
     all_removed_nodes = set()
 
     if pruning_before_enrichment:
@@ -195,13 +202,6 @@ def run_enrichment_analysis(studyset_list,
         if root_children_prune:
             print(f"studyset_leaves: {studyset_leaves}")
             print(f"Root children pruner activated, pruning {levels} levels from root")
-            # Time to create the graph
-            time_start = time.time()
-            G = create_graph_from_map(studyset_leaves, parent_map_file, max_n_leaf_classes=inf)
-            time_end = time.time()
-            print(f"Graph creation time: {time_end - time_start} seconds")
-            # draw_graph(G, graphing_layout="default", title="Graph")
-            pruned_G = G.copy()
             time_start_total = time.time()
             pruned_G, removed_nodes, execution_count = root_children_pruner(pruned_G, levels, allow_re_execution = False, execution_count = 0)
             time_end_total = time.time()
@@ -212,8 +212,6 @@ def run_enrichment_analysis(studyset_list,
         time_start_total = time.time()
         if linear_branch_prune:
             print(f"Linear branch pruner activated, keeping only every {n}-th node in linear branches")
-            if pruned_G is None:
-                pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, max_n_leaf_classes=inf)
             
             pruned_G, removed_nodes = linear_branch_collapser_pruner_remove_less(pruned_G, n)
             # print(f"Removed nodes by linear branch pruner: {removed_nodes}")
@@ -252,11 +250,6 @@ def run_enrichment_analysis(studyset_list,
 
     if high_p_value_prune: # Uses corrected p-values if correction was applied
         print(f"High p-value pruner activated, pruning nodes with p-value above {p_value_threshold}")
-        if pruned_G is None:
-            print("Creating new graph for high p-value pruning (no prior pruning applied)")
-            pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, max_n_leaf_classes=inf)
-        else:
-            print("Using previously pruned graph for high p-value pruning")
 
         time_start_total = time.time()
         pruned_G, removed_nodes = high_p_value_branch_pruner(pruned_G, enrichment_results, p_value_threshold)
@@ -278,11 +271,6 @@ def run_enrichment_analysis(studyset_list,
 
     if zero_degree_prune:
         print("Applying zero-degree pruner to remove nodes with zero degree...")
-        if pruned_G is None:
-            print("Creating new graph for zero-degree pruning (no prior pruning applied)")
-            pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, max_n_leaf_classes=inf)
-        else:
-            print("Using previously pruned graph for zero-degree pruning")
 
         time_start_total = time.time()
         pruned_G, removed_nodes = zero_degree_pruner(pruned_G)
@@ -298,10 +286,6 @@ def run_enrichment_analysis(studyset_list,
         for cls in removed_nodes:
             if cls in enrichment_results:
                 del enrichment_results[cls]
-        
-    # Create graph if it does not exist yet
-    if pruned_G is None:
-        pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, max_n_leaf_classes=inf)
 
         # print("Final enrichment results after zero-degree pruning:")
         # print_enrichment_results(enrichment_results)
