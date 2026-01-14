@@ -60,8 +60,8 @@ def find_paths_to_root_with_map(start_class, parents_map):
     dfs(start_class, [start_class])
     return paths
             
-
-def find_paths_to_root(ontology, start_class, 
+# Not used anymore
+def find_paths_to_root_with_ontology(ontology, start_class, 
                        leaf_to_parents_json_file = 'data/removed_leaf_classes_to_direct_parents_map.json'): # should work for leaf classes too
     paths = []
 
@@ -131,18 +131,6 @@ def create_graph_from_paths(paths):
         for i in range(len(path) - 1):
             G.add_edge(path[i], path[i + 1])
     
-    # chebi_ontology="data/filtered_chebi_no_leaves_with_smiles_no_deprecated_structural.owl"
-    # mapping = {}
-    # for node in G.nodes():
-        # label = get_name(chebi_ontology, node) #integrate the ontology better
-        # if label:
-        #     mapping[node] = label
-        # else:
-        #     # mapping[node] = node
-        #     # Remove prefix for better readability
-        #     mapping[node] = node.replace("http://purl.obolibrary.org/obo/CHEBI_", "")
-    # G = nx.relabel_nodes(G, mapping)
-    
     return G
 
 # Not used anymore. If to be used, potentially remove color_map parameter
@@ -174,7 +162,7 @@ def create_graph_from_ontology(classes, classification, color_map = ['#FFB6C1', 
     return G
 
 def create_graph_from_map(classes, parent_map_json_file, max_n_leaf_classes=inf):
-    
+
     with open(parent_map_json_file, "r") as f:
         parents_map = json.load(f)
 
@@ -183,7 +171,45 @@ def create_graph_from_map(classes, parent_map_json_file, max_n_leaf_classes=inf)
 
     for cls in classes:
         if j % 10 == 0:
+            print(f"Processing class {j+1}/{len(classes)}")
+
+        paths = find_paths_to_root_with_map(cls, parents_map)
+        print(f"Time taken to find paths for class {cls}: {time_end - time_start} seconds")
+
+        for path in paths:
+            for i in range(len(path) - 1):
+                u, v = path[i], path[i + 1]
+
+                if not G.has_edge(u, v):
+                    G.add_edge(u, v)
+
+                    # add label once, when node first appears
+                    if 'label' not in G.nodes[u]:
+                        G.nodes[u]['label'] = id_to_name(u)
+                    if 'label' not in G.nodes[v]:
+                        G.nodes[v]['label'] = id_to_name(v)
+
+        j += 1
+        if j >= max_n_leaf_classes:
+            break
+
+    print(f"Total number of starting leaf classes processed in graph: {j}")
+    return G
+
+# Similar to the above but doesn't first create separate graphs gor each class
+def create_graph_from_map_original(classes, parent_map_json_file, max_n_leaf_classes=inf):
+    
+    with open(parent_map_json_file, "r") as f:
+        parents_map = json.load(f)
+
+    G = nx.DiGraph()
+    j = 0
+    
+
+    for cls in classes:
+        if j % 10 == 0:
             print(f"Proceeesing class {j+1}/{len(classes)}")
+
         paths = find_paths_to_root_with_map(cls, parents_map)
         H = create_graph_from_paths(paths)
 
