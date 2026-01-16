@@ -1,8 +1,16 @@
-general_font {
-    font-family: inherit;
+body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 20px 40px ;
 }
 
-h1 {
+
+/* body {
+    background-color: #f5f5f5;
+    margin: 0;
+    padding: 0;
+} */
+
+/* h1 {
     color: black;
     text-align: center;
     font-family: 'general_font';
@@ -23,7 +31,7 @@ button
 {
     font-family: 'general_font';
     font-size: 18px;
-}
+} */
 
 /* Graph and menu */
 
@@ -42,31 +50,31 @@ button
     border: none;
 }
 
-.navbar {
+.custom-navbar {
   overflow: hidden;
   background-color: #800020;
 
-}
+} 
 
-.navbar .popup {
+.custom-navbar .popup {
   overflow: visible;
 }
 
-.navbar a {
+.custom-navbar a {
   float: left;
   font-size: 16px;
   color: white;
   text-align: center;
   padding: 14px 16px;
   text-decoration: none;
-}
+} 
 
-.dropdown {
+.custom-dropdown {
   float: left;
   overflow: hidden;
 }
 
-.dropdown .dropbtn {
+.custom-dropdown .custom-dropbtn {
   font-size: 16px;  
   border: none;
   outline: none;
@@ -77,20 +85,20 @@ button
   margin: 0;
 }
 
-.navbar a:hover, .dropdown:hover .dropbtn {
+.custom-navbar a:hover, .custom-dropdown:hover .custom-dropbtn {
   background-color: #a73e6f;
 }
 
-.dropdown-content {
+.custom-dropdown-content {
   display: none;
   position: absolute;
   background-color: #f9f9f9;
   min-width: 160px;
   box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
   z-index: 1;
-}
+} 
 
-.dropdown-content a {
+.custom-dropdown-content a {
   float: none;
   color: black;
   padding: 12px 16px;
@@ -99,11 +107,11 @@ button
   text-align: left;
 }
 
-.dropdown-content a:hover {
+.custom-dropdown-content a:hover {
   background-color: #ddd;
 }
 
-.dropdown:hover .dropdown-content {
+.custom-dropdown:hover .custom-dropdown-content {
   display: block;
 }
 
@@ -135,7 +143,11 @@ button
 .legend-gradient {
     width: 20px;              
     height: 130px;          
-    background: linear-gradient(to bottom, #ca3900, #ffffff);  
+    background: linear-gradient(
+      to bottom,
+      rgba(202, 57, 0, 1),
+      rgba(202, 57, 0, 0.1) /* from red (high significance) to transparent (low significance) */
+    );
     border: 1px solid #999;
     margin-right: 10px;
 }
@@ -192,11 +204,6 @@ button
   visibility: visible;
   -webkit-animation: fadeIn 1s;
   animation: fadeIn 1s
-}
-
-input[type="number"] {
-    width: 50px;
-    padding: 2px 4px
 }
 
 /* Add animation (fade in the popup) */

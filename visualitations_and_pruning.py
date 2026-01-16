@@ -10,18 +10,24 @@ import json
 import time
 from networkx.readwrite import json_graph
 
-def id_to_name(class_id):
-    id_to_name_map_file = "data/chebi_id_to_name_map.json" 
+# def id_to_name(class_id):
+#     id_to_name_map_file = "data/chebi_id_to_name_map.json" 
 
-    with open(id_to_name_map_file, 'r') as f:
-        id_to_name_map = json.load(f)
+#     with open(id_to_name_map_file, 'r') as f:
+#         id_to_name_map = json.load(f)
 
+#     prefix = "http://purl.obolibrary.org/obo/"
+#     if class_id.startswith(prefix):
+#         # remove prefix
+#         class_id = class_id.replace(prefix, "")
+#     name = id_to_name_map.get(class_id)
+#     return f"{name} ({class_id})" if name else class_id
+
+def strip_prefix(class_id):
     prefix = "http://purl.obolibrary.org/obo/"
     if class_id.startswith(prefix):
-        # remove prefix
-        class_id = class_id.replace(prefix, "")
-    name = id_to_name_map.get(class_id)
-    return f"{name} ({class_id})" if name else class_id
+        return class_id.replace(prefix, "")
+    return class_id
 
 #####################################
 # Forming graph
@@ -174,7 +180,6 @@ def create_graph_from_map(classes, parent_map_json_file, max_n_leaf_classes=inf)
             print(f"Processing class {j+1}/{len(classes)}")
 
         paths = find_paths_to_root_with_map(cls, parents_map)
-        print(f"Time taken to find paths for class {cls}: {time_end - time_start} seconds")
 
         for path in paths:
             for i in range(len(path) - 1):

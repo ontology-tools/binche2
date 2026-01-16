@@ -114,6 +114,7 @@ def get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, s
 
         results[class_to_check]={
             "class": id_to_name(class_to_check),
+            # "class_id": strip_prefix(class_to_check),
             "n_ss_annotated": n_ss_annotated,
             "n_ss_leaves": n_ss_leaves,
             "n_bg_annotated": n_bg_annotated,
