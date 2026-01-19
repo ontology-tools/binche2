@@ -221,11 +221,21 @@
             layout: {
                 name: 'breadthfirst',
                 directed: true,
-                padding: 10
+                padding: 10,
             }
         });
 
         let labelsVisible = true;
+
+ 10
+        // Flip the graph vertically to have roots at the top
+        cy.nodes().forEach(node => {
+            const pos = node.position();
+            node.position({ x: pos.x, y: -pos.y });
+        });
+
+        // Center the graph in the viewport
+        cy.fit(50); // 50px padding
 
         /////////
         // Colouring
@@ -428,8 +438,17 @@
             cy.layout({
                 name: layoutName,
                 directed: true,
-                padding: 10
+                padding: 10,
             }).run();
+
+            // Flip the graph vertically to have roots at the top
+            cy.nodes().forEach(node => {
+                const pos = node.position();
+                node.position({ x: pos.x, y: -pos.y });
+            });
+
+            // Center the graph in the viewport
+            cy.fit(50); // 50px padding
         });
         });
 

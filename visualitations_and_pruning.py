@@ -10,18 +10,18 @@ import json
 import time
 from networkx.readwrite import json_graph
 
-# def id_to_name(class_id):
-#     id_to_name_map_file = "data/chebi_id_to_name_map.json" 
+def id_to_name(class_id):
+    id_to_name_map_file = "data/chebi_id_to_name_map.json" 
 
-#     with open(id_to_name_map_file, 'r') as f:
-#         id_to_name_map = json.load(f)
+    with open(id_to_name_map_file, 'r') as f:
+        id_to_name_map = json.load(f)
 
-#     prefix = "http://purl.obolibrary.org/obo/"
-#     if class_id.startswith(prefix):
-#         # remove prefix
-#         class_id = class_id.replace(prefix, "")
-#     name = id_to_name_map.get(class_id)
-#     return f"{name} ({class_id})" if name else class_id
+    prefix = "http://purl.obolibrary.org/obo/"
+    if class_id.startswith(prefix):
+        # remove prefix
+        class_id = class_id.replace(prefix, "")
+    name = id_to_name_map.get(class_id)
+    return f"{name} ({class_id})" if name else class_id
 
 def strip_prefix(class_id):
     prefix = "http://purl.obolibrary.org/obo/"
