@@ -1,10 +1,13 @@
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, Response
 from fishers_calculations import run_enrichment_analysis, run_enrichment_analysis_plain_enrich_pruning_strategy
 from visualitations_and_pruning import graph_to_cytospace_json
 import re
+import csv
+from io import StringIO
+
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Replace with a secure secret key
@@ -52,6 +55,7 @@ def map_p_value_correction_method(method_name):
 @app.route('/run_analysis', methods=['GET', 'POST'])
 # option to choose pruning methods
 def run_analysis():
+
     raw_studyset = session.get('study_set')
     if not raw_studyset:
         return redirect(url_for('submission'))
@@ -127,6 +131,7 @@ def graph():
     pruning = session.get('pruning', {})
     correction_method = session.get('correction_method', {})
     return render_template('graph.html', pruning=pruning, correction_method=correction_method)
+
 
 
 if __name__ == '__main__':

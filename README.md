@@ -53,16 +53,32 @@ Run the task *"count_removed_classes_for_class"* to calculate the removed leaf c
 Run the task "enrichment_analysis_plain"
  ...
 
-### Behind the webpage
+## Behind the webpage
 
-#### Get it working
+### Get it working
 
 Run file `website/app.py`. 
 To be able to proceed with the next steps, all necessary files are needed but these should already be obtained by previous steps (or saved on a cloud somewhere......)
 
-#### Enrichment analysis
+### Enrichment analysis
 
-#### The graph
+### Pruning strategies
+Pruning options are available for the possibility to make the graph less clustered. The following pruners can be chosen:
+
+* **Root Children Pruner:** Removes the roots and its children up to a defined level (number of levels being an adaptable paramter). This allows removal of more general, and less meaningful, entities in the ontology. For example levels set to 2 will remove the roots and one level of their descendants.
+
+* **Linear Branch Collapser Pruner:** Removes linear branches within the graph; only nodes with one parent and one child can be removed. Either all intermediate nodes in the branch can be removed (set n = 0) or a a chosen number of nodes (n) in the linear branch will be kept. E.g. n = 3 will keep every third node in the branch.
+
+* **High P-Value Branch Pruner:** Removes branches from the graph components that only contain nodes with a p-value greater than 0.05 (this value can be changed). Therefore a node with a higher p-value can still be kept, if it has at least one decendant with a p-value that lower than the threshold. 
+ 
+* **Zero-degree pruner:** Removes nodes that has no connections with other nodes; that is nodes with a total degree of zero. 
+
+There is either the option to choose which pruning options that will be applied. The chosen srategies will then be implemented ones each. Alternatively, different pruning options can be implemented in a looping manner. There is first a pre-loop phase where pruners are applied ones, and thereafter a loop-phase where pruners are applied until in a loop until no more changes are made.
+
+* **Plain Enrichment pruning strategy**: The pre-loop phase applies the high p-value branch pruner (with a threshold of 0.5), the linear branch collapser pruner (with n = 0), and the root children pruner (levels = 2). The loop-phase applies the high p-value branch pruner (with a threshold of 0.5), the linear branch collapser pruner (with n = 0), and the zero-degree vertex pruner. 
+
+
+### The graph
 
 The colouring based on the significance of the p-value is dependant on the values in that actual session. So it is simply relative. To make the the colouring absolute, go to `website/templates/graph.html`, and change the following line:
 
@@ -74,6 +90,8 @@ The colouring based on the significance of the p-value is dependant on the value
 Hovering over a node gives more displays more detailed information about it. Bothe raw and correcte dp-values are shown, as well as its ChEBI identity number. 
 
 Nodes can be selected by clicking on them. Right-clicking on a node provides options such as 'Select first neighbors' and 'Select descendants'. 
+
+
 
 
 

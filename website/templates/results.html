@@ -9,6 +9,13 @@
 <p>Analysed leaves: {{results.study_set}}</p>
 <p>Removed nodes: {{results.removed_nodes}}</p> 
 
+<a href="#" id="downloadCsv"
+style="display:inline-block; padding:8px 16px; margin-top:20px; 
+          background:#ee1e97; color: white; text-decoration:none; 
+          border-radius:4px;">
+    Download Results (CSV)
+</a>
+
 <a href="{{url_for('graph')}}" 
    style="display:inline-block; padding:8px 16px; margin-top:20px; 
           background:#8d0f83; color: white; text-decoration:none; 
@@ -51,5 +58,57 @@
     </tbody>
 
 </table>
+
+<!-- <script>
+document.getElementById('downloadCsv').addEventListener('click', function(e) {
+    e.preventDefault();
+    
+    // Create CSV content
+    let csv = 'Class,Raw p-value,Corrected p-value\n';
+    
+    {% for item in results.enrichment_results.values() %}
+    csv += '{{ item.class }},' + 
+        '{{ "%.4e"|format(item.p_value) }},' + 
+        '{% if item.get("p_value_corrected") %}{{ "%.4e"|format(item.p_value_corrected) }}{% else %}N/A{% endif %}\n';
+    {% endfor %}
+    
+    // Create download
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'enrichment_results.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+});
+</script> -->
+
+<script>
+document.getElementById('downloadCsv').addEventListener('click', function(e) {
+    e.preventDefault();
+    
+    // Data passed from server as JSON
+    const results = {{ csv_data | tojson }};
+    
+    // Build CSV from data
+    let csv = 'Class,Raw p-value,Corrected p-value\n';
+    results.forEach(row => {
+        csv += `${row.class},${row.p_value},${row.p_value_corrected}\n`;
+    });
+    
+    // Create download
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'enrichment_results.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+});
+</script>
 
 {% endblock %}
