@@ -51,8 +51,8 @@
             Linear branch pruning
         </label><br>
         <div class="text-muted" style="margin-left:20px; margin-bottom:10px;">
-        n (keep every n:th node):
-        <input type ="number" name="linear_branch_n" value ="2" min="2" class="form-control" style="width:80px;">
+        n (Keeps every n:th node in the branch. n=0 removes all intermediate nodes):
+        <input type ="number" name="linear_branch_n" value ="2" min="0" class="form-control" style="width:80px;">
         </div>
 
         <!-- HIGH P-VALUE PRUNE -->
@@ -62,8 +62,8 @@
         </label><br>
         <div class="text-muted" style="margin-left:20px; margin-bottom:10px;">
         <label>
-            p-value threshold:
-        <input type="number" 
+            p-value threshold (a node with a higher p-value will be still be kept if it has a descendant with a p-value below the threshold):
+        <input type="number" w
             name="p_value_threshold" 
             value="0.05" 
             step="0.01" 

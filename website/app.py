@@ -36,6 +36,9 @@ def parse_studyset(studyset: str):
     # Clean every item: remove quotes + spaces
     cleaned = [x.strip().replace('"', "") for x in items if x.strip()]
 
+    # Convert colons to underscores
+    cleaned = [x.replace(":", "_") for x in cleaned]
+
     return cleaned
 
 def map_p_value_correction_method(method_name):

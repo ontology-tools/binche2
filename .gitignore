@@ -3,3 +3,8 @@ data/
 # Python
 __pycache__/
 *.pyc
+
+# Virtual Environments
+bincheEnv/
+venv/
+env/

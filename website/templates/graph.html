@@ -97,7 +97,7 @@
                             Root-children pruning
                         </label><br>
                         Levels:
-                        <input type="number" name="levels" min="0" value="{{ pruning.get('levels', 2) }}">
+                        <input type="number" name="levels" min="0" value="{{ pruning.get('levels', 2) }}" style="width:70px;">
                         <br><br>
 
                         <!-- LINEAR BRANCH PRUNE -->
@@ -107,7 +107,7 @@
                             Linear branch pruning
                         </label><br>
                         n (keep every n:th node):
-                        <input type ="number" name="linear_branch_n" min="2" value="{{ pruning.get('linear_branch_n', 2) }}">
+                        <input type ="number" name="linear_branch_n" min="0" value="{{ pruning.get('linear_branch_n', 2) }}" style="width:70px;">
                         <br><br>
 
                         <!-- HIGH P-VALUE PRUNE -->
@@ -117,7 +117,7 @@
                             High p-value pruning    
                         </label><br>
                         p-value threshold:
-                        <input type="number" name="p_value_threshold" step="0.01" min="0" max="1" value="{{ pruning.get('p_value_threshold', 0.05) }}">
+                        <input type="number" name="p_value_threshold" step="0.01" min="0" max="1" value="{{ pruning.get('p_value_threshold', 0.05) }}" style="width:70px;">
                         <br><br>
 
                         <!-- ZERO DEGREE PRUNE --> 
@@ -140,11 +140,11 @@
     <div id="cy"></div>
 
     <div id="color-legend">
-    <h4 class="mb-1">Significance</h4>
+    <div id="legend-title"></div>
     <div class="legend-container">
         <div class="legend-gradient"></div>
         <div class="legend-labels">
-            <span>Low (p = 1.0)</span>
+            <span>Low </span>
             <span id="legend-max">High</span>
         </div>
     </div>
@@ -266,6 +266,15 @@
         // Update legend
         document.getElementById('legend-max').textContent =
             `High (p ≤ ${Math.pow(10, -maxExponent).toExponential(1) })`;
+        
+        const titleDiv = document.getElementById('legend-title');
+
+        if (colourScaleMode === 'relative') {
+            titleDiv.innerHTML = '<h4 class="mb-1">Significance (relative)</h4>';
+        } else {
+            titleDiv.innerHTML = '<h4 class="mb-1">Significance</h4>';
+        }
+                
 
 
         // Convert hex to RGB

@@ -341,29 +341,33 @@ def process_branch_remove_less(head, node, G, n, removed_nodes):
         children_before = []
     
     if len(branch_nodes):
-        # Keep every n:th node in the branch
-        i = 0
-        nodes_to_keep = [head]
-        for node in branch_nodes:
-            i += 1
-            if i % n == 0:
-                nodes_to_keep.append(node)
-        nodes_to_keep.append(last_node)
-        
-        # print(f"Nodes to keep in branch: {nodes_to_keep}")
-        
+        # Determine nodes to keep
+        if n == 0:
+            # Remove all intermediate nodes
+            nodes_to_keep = [head, last_node]
+        else:
+            # Keep every n:th node in the branch
+            i = 0
+            nodes_to_keep = [head]
+            for node in branch_nodes:
+                i += 1
+                if i % n == 0:
+                    nodes_to_keep.append(node)
+            nodes_to_keep.append(last_node)
+            
+            # print(f"Nodes to keep in branch: {nodes_to_keep}")
+            
         for node in branch_nodes:
             if node not in nodes_to_keep:
                 removed_nodes.add(node)
                 G.remove_node(node)
         
         for i in range(len(nodes_to_keep)-1):
-            # Check both nodes exist before adding edge
+            # Check that both nodes exist before adding edge
             if G.has_node(nodes_to_keep[i]) and G.has_node(nodes_to_keep[i+1]):
                 if not G.has_edge(nodes_to_keep[i+1], nodes_to_keep[i]):
                     G.add_edge(nodes_to_keep[i+1], nodes_to_keep[i])
-                    # print(f"Node {nodes_to_keep[i+1]} connected to {nodes_to_keep[i]}")
-    
+        
     # Recurse only over children that still exist in the graph
     for child in children_before:
         if G.has_node(child):  # Check before recursing
@@ -427,13 +431,11 @@ def process_node_for_p_value_pruner(node, G, p_value_dict, p_value_threshold, re
     if "p_value_corrected" in p_value_dict.get(node, {}):
         node_p_value = p_value_dict.get(node, {}).get("p_value_corrected")
     else:
-        node_p_value = p_value_dict.get(node, {}).get("p_value", float("inf"))
-    if node_p_value == float("inf"):
-        print(f"Warning: p-value for node {node} not found. Assuming high p-value.")
-    # else:
-        # print(f"Node {node} has p-value {node_p_value}")
-  
-    # TODO: implement choosing correct p-value if it exists
+        node_p_value = p_value_dict.get(node, {}).get("p_value", None)
+
+    if node_p_value is None:
+        print(f"Warning: p-value for node {node} not found.")
+        return True # Keep node if p-value not found since it is most likely a leaf node.
 
     if node_p_value <= p_value_threshold:
         has_good_decendant = True
