@@ -1,4 +1,13 @@
-# BiNChE2 - Current workflow
+# BiNChE2 (preliminary name)
+
+BiNChE2 is an updated version of [BiNChE](https://github.com/pcm32/BiNCheWeb/wiki/BiNChE#graph-pruning-strategies). It is a tool for ontology-based chemical enrichment analysis. It is based on the [ChEBI](https://www.ebi.ac.uk/chebi/) ontology of chemical entities.
+
+## BiNChE2 - Current workflow
+
+#### 0. UV environment
+A UV environment with the following installations was used:
+
+```uv pip install py_horned_owl rdkit networkx matplotlib pandas tqdm flask flask_sqlalchemy scipy```
 
 #### 1. Load ChEBI
 Download and load ChEBI using `load_chebi.py` (TODO: double check how download was computed)
@@ -44,30 +53,30 @@ Run the task *"count_removed_classes_for_class"* to calculate the removed leaf c
 Run the task "enrichment_analysis_plain"
  ...
 
-### Using the webpage
+### Behind the webpage
 
 #### Get it working
 
 Run file `website/app.py`. 
-To be bale to proceed with the next steps, all necessary files are needed but these should already be obtained by previous steps (or saved so on a cloud somewhere......)
+To be able to proceed with the next steps, all necessary files are needed but these should already be obtained by previous steps (or saved on a cloud somewhere......)
 
 #### Enrichment analysis
 
 #### The graph
 
-The colouring based on the significance of the p-value is dependant on the values in that actual session. So it is simply relative. The corrected p-value is used if available.
+The colouring based on the significance of the p-value is dependant on the values in that actual session. So it is simply relative. To make the the colouring absolute, go to `website/templates/graph.html`, and change the following line:
 
-Nodes can be selected by clicking on them.
 
-GOAL (as in not yet implemented).
-Right-clicking on a node gives the user options such as 'Select first neighbors' and 'Select descendants'
+```const colourScaleMode = 'relative'; // 'absolute' or 'relative'```
 
-Find other goals here (tools implemented in BiNChE):
-https://github.com/pcm32/BiNCheWeb/wiki/BiNChE#graph-pruning-strategies
+ The corrected p-value is used if available. 
 
-TODO: setg 1 att implementera så att högerklickning faktiskt får upp något. Would be lovely
+Hovering over a node gives more displays more detailed information about it. Bothe raw and correcte dp-values are shown, as well as its ChEBI identity number. 
 
-...
+Nodes can be selected by clicking on them. Right-clicking on a node provides options such as 'Select first neighbors' and 'Select descendants'. 
+
+
+
 
 
 

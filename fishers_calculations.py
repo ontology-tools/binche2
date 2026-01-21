@@ -314,7 +314,7 @@ def run_enrichment_analysis(studyset_list,
 
 def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
                             levels=2, # for root children pruner
-                            n=2, # for linear branch pruner
+                            n=0, # for linear branch pruner
                             p_value_threshold=0.05, # for high p-value pruner
                             classification="structural",
                             check_leaf_classes=False):
@@ -356,12 +356,15 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
     print("Starting pre-loop pruning phase.")
     G, removed_nodes = high_p_value_branch_pruner(G, enrichment_results, p_value_threshold)
     all_removed_nodes.update(removed_nodes)
+    print(f"Removed nodes by high p-value pruner: {removed_nodes}")
 
     G, removed_nodes = linear_branch_collapser_pruner_remove_less(G, n)
     all_removed_nodes.update(removed_nodes)
+    print(f"Removed nodes by linear branch pruner: {removed_nodes}")
 
     G, removed_nodes, execution_count = root_children_pruner(G, levels, allow_re_execution = False, execution_count = 0)
     all_removed_nodes.update(removed_nodes)
+    print(f"Removed nodes by root children pruner: {removed_nodes}")
 
 
     ## Loop phase ##
@@ -392,13 +395,14 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
         
         G, removed_nodes = high_p_value_branch_pruner(G, current_enrichment, p_value_threshold)
         all_removed_nodes.update(removed_nodes)
-
+        print(f"Removed nodes by high p-value pruner: {removed_nodes}")
         # not including since we do not want to remove too many nodes
         # G, removed_nodes = linear_branch_collapser_pruner_remove_less(G, n)
         # all_removed_nodes.update(removed_nodes)
 
         G, removed_nodes = zero_degree_pruner(G)
         all_removed_nodes.update(removed_nodes)
+        print(f"Removed nodes by zero-degree pruner: {removed_nodes}")
 
         size_after = G.number_of_nodes()
         first_iteration = False
