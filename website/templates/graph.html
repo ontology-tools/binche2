@@ -307,7 +307,7 @@
 
             let color = "lightgrey"; // default color
 
-            if (p != null && p > 0) {
+            if (p != null) {
                 const exponent = -Math.log10(p);
                 let t = exponent / maxExponent;
                 t = 1 - t; // Invert t so that low p-values are high t
@@ -398,7 +398,8 @@
 
         window.selectDescendants = function() {
             if (selectedNode) {
-                const descendants = selectedNode.successors();
+                // Select all descendants (this will be predecessors due to the directed nature of the graph)
+                const descendants = selectedNode.predecessors();
                 descendants.select();
             }
             contextMenu.style.display = 'none';
