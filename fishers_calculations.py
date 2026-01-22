@@ -91,7 +91,8 @@ def get_n_ss_annotated(studyset_leaves, class_to_check, class_to_leaf_map):
     leaf_descendants = set(class_to_leaf_map.get(class_to_check, []))
 
     # count how many study classes appear in those leaf descendants
-    n_ss_annotated = sum(cls in leaf_descendants for cls in studyset_leaves)
+    # n_ss_annotated = sum(cls in leaf_descendants for cls in studyset_leaves)
+    n_ss_annotated = len(leaf_descendants.intersection(set(studyset_leaves)))
 
     return n_ss_annotated
 

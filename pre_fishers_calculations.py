@@ -23,8 +23,8 @@ def count_removed_leaves(removed_classes_csv, classification):
     elif classification not in ["structural", "functional"]:
         print("Classification must be either 'structural' or 'functional'.")
         return 0
-    removed_structural = removed_classes[removed_classes["Classification"] == classification]
-    return len(removed_structural)
+    removed_set = removed_classes[removed_classes["Classification"] == classification]
+    return len(removed_set)
 
 def build_class_to_leaf_map(leaf_to_ancestors_file, class_to_leaf_output_file):
     """ Build a JSON map from each class IRI to ALL its leaf descendants using an existing leaf-to-ancestors map."""
@@ -62,18 +62,18 @@ def build_class_to_leaf_map(leaf_to_ancestors_file, class_to_leaf_output_file):
 
     print(f"Saved class to leaf descendants map with {len(class_to_leaf_json)} classes to {class_to_leaf_output_file}.")
     
-def count_removed_classes_for_class(class_iri, subclass_map, classification, check_leaf_classes = False, removed_classes_csv = None):
+def count_removed_classes_for_class(class_iri, leaf_descendants_map, classification, check_leaf_classes = False, removed_classes_csv = None):
     """Count how many classes under the given class_iri were removed in the structural ontology."""
 
-    if str(class_iri) not in subclass_map: 
+    if str(class_iri) not in leaf_descendants_map: 
         print(f"⚠️ Class {class_iri} is not found in map file.")
         return 0, 0
-    elif len(subclass_map[str(class_iri)]) == 0: # Should not happen since then it would be a leaf
+    elif len(leaf_descendants_map[str(class_iri)]) == 0: # Should not happen since then it would be a leaf
         print(f"⚠️ Class {class_iri} has no descendants in full ontology.")
         return 0, 0
     
     # Get string of sublclasses from the map
-    subclasses = subclass_map[str(class_iri)]
+    subclasses = leaf_descendants_map[str(class_iri)]
     n_subclasses = len(subclasses)
 
     """ Checks that all found subclasses are of the expected type (structural or functional)""" # Probably not needed

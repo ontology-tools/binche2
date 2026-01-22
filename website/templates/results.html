@@ -59,7 +59,7 @@ style="display:inline-block; padding:8px 16px; margin-top:20px;
 
 </table>
 
-<!-- <script>
+<script> // Not ideal since this is mixing Jinja2 template syntax (server-side) with JavaScript (client-side) but it works for now.
 document.getElementById('downloadCsv').addEventListener('click', function(e) {
     e.preventDefault();
     
@@ -71,32 +71,6 @@ document.getElementById('downloadCsv').addEventListener('click', function(e) {
         '{{ "%.4e"|format(item.p_value) }},' + 
         '{% if item.get("p_value_corrected") %}{{ "%.4e"|format(item.p_value_corrected) }}{% else %}N/A{% endif %}\n';
     {% endfor %}
-    
-    // Create download
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'enrichment_results.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-});
-</script> -->
-
-<script>
-document.getElementById('downloadCsv').addEventListener('click', function(e) {
-    e.preventDefault();
-    
-    // Data passed from server as JSON
-    const results = {{ csv_data | tojson }};
-    
-    // Build CSV from data
-    let csv = 'Class,Raw p-value,Corrected p-value\n';
-    results.forEach(row => {
-        csv += `${row.class},${row.p_value},${row.p_value_corrected}\n`;
-    });
     
     // Create download
     const blob = new Blob([csv], { type: 'text/csv' });
