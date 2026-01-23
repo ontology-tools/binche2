@@ -5,6 +5,7 @@
 {% endblock %}
 
 {% block body %}
+<div>
 <h1>Enrichment Analysis Results</h1>
 <p>Analysed leaves: {{results.study_set}}</p>
 <p>Removed nodes: {{results.removed_nodes}}</p> 
@@ -33,7 +34,7 @@ style="display:inline-block; padding:8px 16px; margin-top:20px;
 
 <br><br>
 <h2>Enrichment results:</h2>
-<table border="1" cellpadding="10" cellspacing="0">
+<table cellpadding="10" cellspacing="0" class="table table-striped table-bordered">
     <thead>
         <tr>
             <th>Class</th>
@@ -84,5 +85,7 @@ document.getElementById('downloadCsv').addEventListener('click', function(e) {
     window.URL.revokeObjectURL(url);
 });
 </script>
+
+</div>
 
 {% endblock %}

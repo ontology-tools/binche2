@@ -17,125 +17,56 @@
 
 {% endblock %}
 
+{% block nav_items %}
+
+<li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle" href="#" id="exportDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="fa fa-download"></i> Export
+    </a>
+    <ul class="dropdown-menu" aria-labelledby="exportDropdown">
+        <li><a href="#" class="dropdown-item export-option" data-format="png">Export as PNG</a></li>
+        <li><a href="#" class="dropdown-item export-option" data-format="jpeg">Export as JPEG</a></li>
+    </ul>
+</li>
+
+<li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle" href="#" id="layoutDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="fa fa-sitemap"></i> Layout
+    </a>
+    <ul class="dropdown-menu" aria-labelledby="layoutDropdown">
+        <li><a href="#" class="dropdown-item layout-option" data-layout="breadthfirst">Breadthfirst</a></li>
+        <li><a href="#" class="dropdown-item layout-option" data-layout="cose">Cose</a></li>
+        <li><a href="#" class="dropdown-item layout-option" data-layout="grid">Grid</a></li>
+        <li><a href="#" class="dropdown-item layout-option" data-layout="circle">Circle</a></li>
+    </ul>
+</li>
+
+<li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle" href="#" id="showHideDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="fa fa-eye"></i> Show/Hide
+    </a>
+    <ul class="dropdown-menu" aria-labelledby="showHideDropdown">
+        <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-unselected">Show selected only</a></li>
+        <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-selected">Hide selected</a></li>
+        <li><a href="#" class="dropdown-item show-hide-option" data-action="show-all">Show all nodes</a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-non-significant">Hide non-significant nodes</a></li>
+        <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-leaves">Hide/Show leaf nodes</a></li>
+        <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-labels">Hide/Show labels</a></li>
+    </ul>
+</li>
+
+<li class="nav-item">
+    <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#pruningModal">
+        <i class="fa fa-sliders"></i> Pruning
+    </a>
+</li>
+
+{% endblock %}
+
 {% block body %}
-<h1 class="text-center mb-4">Enrichment</h1>
 
 <div class="graph-wrapper">
-    <div class="custom-navbar">
-        <a href="/">Home</a>
-
-        <div class="custom-dropdown">
-            <button class="custom-dropbtn">Export ▾
-            <i class="fa fa-caret-down"></i>
-            </button>
-            <div class="custom-dropdown-content">
-                <a href="#" class="export-option" data-format="png">Export as PNG</a>
-                <a href="#" class="export-option" data-format="jpeg">Export as JPEG</a>
-            </div>
-        </div>
-
-        <div class="custom-dropdown">
-            <button class="custom-dropbtn">Layout ▾
-            <i class="fa fa-caret-down"></i>
-            </button>
-            <div class="custom-dropdown-content">
-                <a href="#" class="layout-option" data-layout="breadthfirst">Breadthfirst</a>
-                <a href="#" class="layout-option" data-layout="cose">Cose</a>
-                <a href="#" class="layout-option" data-layout="grid">Grid</a>
-                <a href="#" class="layout-option" data-layout="circle">Circle</a>
-            </div>
-        </div>
-
-        <div class="custom-dropdown">
-            <button class="custom-dropbtn">Show/Hide ▾
-            <i class="fa fa-caret-down"></i>
-            </button>
-            <div class="custom-dropdown-content">
-                <a href="#" class="show-hide-option" data-action="hide-unselected">Show selected only</a>
-                <a href="#" class="show-hide-option" data-action="hide-selected">Hide selected</a>
-                <a href="#" class="show-hide-option" data-action="show-all">Show all nodes</a>
-                <a href="#" class="show-hide-option" data-action="hide-non-significant">Hide non-significant nodes</a>
-                <a href="#" class="show-hide-option" data-action="hide-leaves">Hide/Show leaf nodes</a>
-                <a href="#" class="show-hide-option" data-action="hide-labels">Hide/Show labels</a>
-            </div>
-        </div> 
-
-        <div class="popup-wrapper">
-            <div class="popup" onclick="adjustPruning()">Pruning
-                <span class="popuptext" id="pruningPopup" onclick="event.stopPropagation()">
-                    <form action = "/run_analysis" method = "POST">
-
-                        <h4>Change correction method <br> and pruning:</h4>
-                        
-                        <!-- LOOPING PRUNING METHOD -->
-                         <label> 
-                             <input type = "radio" name = "looping_prune_method" value = "plain_enrich" 
-                             {% if pruning.get('method') == 'plain_enrich' %} checked {% endif %} required>
-                             Plain enrichment pruning strategy <br>
-                                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<small>(no further selections needed)</small>
-                         </label><br></br>
-                        <label>
-                            <input type = "radio" name = "looping_prune_method" value = "no_loop_prune"
-                            {% if pruning.get('method') == 'custom' %} checked {% endif %}>
-                            No looping pruning <br>
-                                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<small>(customise pruning options below)</small>
-                        </label><br></br>
-                        
-                        <!-- P-VALUE CORRECTION METHOD -->
-                        <label for="p_value_correction_method">P-value correction method:</label> 
-                        <select name ="p_value_correction_method" id="p_value_correction_method">
-                            <option value="benjamini_hochberg" {% if correction_method.get('benjamini_hochberg_correct') %} selected {% endif %}>Benjamini-Hochberg</option>
-                            <option value="bonferroni" {% if correction_method.get('bonferroni_correct') %} selected {% endif %}>Bonferroni</option>
-                            <option value="none" {% if not correction_method.get('bonferroni_correct') and not correction_method.get('benjamini_hochberg_correct') %} selected {% endif %}>None</option>
-                        </select>
-
-                        <br><br>
-                        <!-- ROOT CHILDREN PRUNE -->
-                        <label>
-                            <input type="checkbox" name="root_children_prune" value="true"
-                            {% if pruning.get('root_children_prune') %} checked {% endif %}> 
-                            Root-children pruning
-                        </label><br>
-                        Levels:
-                        <input type="number" name="levels" min="0" value="{{ pruning.get('levels', 2) }}" style="width:70px;">
-                        <br><br>
-
-                        <!-- LINEAR BRANCH PRUNE -->
-                        <label>
-                            <input type="checkbox" name="linear_branch_prune" value="true"
-                            {% if pruning.get('linear_branch_prune') %} checked {% endif %}> 
-                            Linear branch pruning
-                        </label><br>
-                        n (keep every n:th node):
-                        <input type ="number" name="linear_branch_n" min="0" value="{{ pruning.get('linear_branch_n', 2) }}" style="width:70px;">
-                        <br><br>
-
-                        <!-- HIGH P-VALUE PRUNE -->
-                        <label>
-                            <input type="checkbox" name="high_p_value_prune" value="true"
-                            {% if pruning.get('high_p_value_prune') %} checked {% endif %}> 
-                            High p-value pruning    
-                        </label><br>
-                        p-value threshold:
-                        <input type="number" name="p_value_threshold" step="0.01" min="0" max="1" value="{{ pruning.get('p_value_threshold', 0.05) }}" style="width:70px;">
-                        <br><br>
-
-                        <!-- ZERO DEGREE PRUNE --> 
-                        <label>
-                            <input type="checkbox" name="zero_degree_prune" value="true"
-                            {% if pruning.get('zero_degree_prune') %} checked {% endif %}> 
-                            Zero-degree pruning
-                        </label><br><br>
-
-                        <button type = "submit">Re-run enrichment calculations</button>
-
-                    </form>
-                </span>   
-            </div>
-        </div>
-
-
-    </div>
 
     <div id="cy"></div>
 
@@ -155,19 +86,6 @@
 
 <script>
 
-    function adjustPruning() {
-        const popup = document.getElementById("pruningPopup");
-        popup.classList.toggle("show");
-    }
-    // Close the popup if the user clicks outside of it
-    window.onclick = function(event) {
-      if (!event.target.matches('.popup')) {
-        var popup = document.getElementById("pruningPopup");
-        if (popup.classList.contains('show')) {
-          popup.classList.remove('show');
-        }
-      }
-    }
 </script>
 
 
@@ -536,5 +454,110 @@
     });
 
 </script>
+
+<!-- Pruning Modal -->
+<div class="modal fade" id="pruningModal" tabindex="-1" aria-labelledby="pruningModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pruningModalLabel">Change correction method and pruning</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form action="/run_analysis" method="POST" id="pruningForm">
+                    <!-- LOOPING PRUNING METHOD -->
+                    <div class="mb-3">
+                        <h6>Looping Pruning Method:</h6>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="looping_prune_method" id="plain_enrich" value="plain_enrich" 
+                            {% if pruning.get('method') == 'plain_enrich' %} checked {% endif %} required>
+                            <label class="form-check-label" for="plain_enrich">
+                                Plain enrichment pruning strategy
+                                <small class="d-block text-muted">(no further selections needed)</small>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="looping_prune_method" id="no_loop_prune" value="no_loop_prune"
+                            {% if pruning.get('method') == 'custom' %} checked {% endif %}>
+                            <label class="form-check-label" for="no_loop_prune">
+                                No looping pruning
+                                <small class="d-block text-muted">(customise pruning options below)</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- P-VALUE CORRECTION METHOD -->
+                    <div class="mb-3">
+                        <label for="p_value_correction_method" class="form-label">P-value correction method:</label>
+                        <select name="p_value_correction_method" id="p_value_correction_method" class="form-select">
+                            <option value="benjamini_hochberg" {% if correction_method.get('benjamini_hochberg_correct') %} selected {% endif %}>Benjamini-Hochberg</option>
+                            <option value="bonferroni" {% if correction_method.get('bonferroni_correct') %} selected {% endif %}>Bonferroni</option>
+                            <option value="none" {% if not correction_method.get('bonferroni_correct') and not correction_method.get('benjamini_hochberg_correct') %} selected {% endif %}>None</option>
+                        </select>
+                    </div>
+
+                    <!-- ROOT CHILDREN PRUNE -->
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="root_children_prune" id="root_children_prune" value="true"
+                            {% if pruning.get('root_children_prune') %} checked {% endif %}>
+                            <label class="form-check-label" for="root_children_prune">
+                                Root-children pruning
+                            </label>
+                        </div>
+                        <div class="ms-4 mt-2">
+                            <label for="levels" class="form-label small text-muted">Levels (to prune including root):</label>
+                            <input type="number" name="levels" id="levels" min="0" value="{{ pruning.get('levels', 2) }}" class="form-control" style="max-width:100px;">
+                        </div>
+                    </div>
+
+                    <!-- LINEAR BRANCH PRUNE -->
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="linear_branch_prune" id="linear_branch_prune" value="true"
+                            {% if pruning.get('linear_branch_prune') %} checked {% endif %}>
+                            <label class="form-check-label" for="linear_branch_prune">
+                                Linear branch pruning
+                            </label>
+                        </div>
+                        <div class="ms-4 mt-2">
+                            <label for="linear_branch_n" class="form-label small text-muted">n (keep every n:th node):</label>
+                            <input type="number" name="linear_branch_n" id="linear_branch_n" min="0" value="{{ pruning.get('linear_branch_n', 2) }}" class="form-control" style="max-width:100px;">
+                        </div>
+                    </div>
+
+                    <!-- HIGH P-VALUE PRUNE -->
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="high_p_value_prune" id="high_p_value_prune" value="true"
+                            {% if pruning.get('high_p_value_prune') %} checked {% endif %}>
+                            <label class="form-check-label" for="high_p_value_prune">
+                                High p-value pruning
+                            </label>
+                        </div>
+                        <div class="ms-4 mt-2">
+                            <label for="p_value_threshold" class="form-label small text-muted">p-value threshold:</label>
+                            <input type="number" name="p_value_threshold" id="p_value_threshold" step="0.01" min="0" max="1" value="{{ pruning.get('p_value_threshold', 0.05) }}" class="form-control" style="max-width:100px;">
+                        </div>
+                    </div>
+
+                    <!-- ZERO DEGREE PRUNE -->
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="zero_degree_prune" id="zero_degree_prune" value="true"
+                            {% if pruning.get('zero_degree_prune') %} checked {% endif %}>
+                            <label class="form-check-label" for="zero_degree_prune">
+                                Zero-degree pruning
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer justify-content-start">
+                <button type="submit" form="pruningForm" class="btn btn-primary">Re-run enrichment calculations</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 {% endblock %}

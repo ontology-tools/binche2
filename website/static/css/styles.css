@@ -1,6 +1,5 @@
 body {
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    margin: 20px 40px ;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 
@@ -36,25 +35,51 @@ button
 /* Graph and menu */
 
 .graph-wrapper {
-    width: 90vw;
-    margin: 0 auto; /* Center on page */
-    border: 1px solid #000000;
-    position: relative; /* For positioning legend */
-
+  width: calc(100vw - 40px);
+  margin: 0;
+  height: calc(100vh - 40px - 64px);
+  border: none;
+  position: relative;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 #cy {
-    width: 100%;
-    height: 80vh;
-    display: block;
-    border: none;
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: none;
 }
 
 .custom-navbar {
   overflow: hidden;
   background-color: #800020;
 
-} 
+}
+
+.navbar {
+  background-color: #800020;
+  color: white;
+
+}
+
+.navbar .nav-link {
+  color: rgba(255, 255, 255, 0.8) !important;
+  padding: 0.5rem 1rem !important;
+}
+
+.navbar .nav-link:hover {
+  color: rgba(255, 255, 255, 1) !important;
+}
+
+.navbar .dropdown-menu {
+  background-color: #f9f9f9;
+  border-color: #ddd;
+}
+
+.navbar .dropdown-item:hover {
+  background-color: #e0e0e0;
+}
 
 .custom-navbar .popup {
   overflow: visible;
@@ -67,7 +92,7 @@ button
   text-align: center;
   padding: 14px 16px;
   text-decoration: none;
-} 
+}
 
 .custom-dropdown {
   float: left;
@@ -75,7 +100,7 @@ button
 }
 
 .custom-dropdown .custom-dropbtn {
-  font-size: 16px;  
+  font-size: 16px;
   border: none;
   outline: none;
   color: white;
@@ -85,7 +110,8 @@ button
   margin: 0;
 }
 
-.custom-navbar a:hover, .custom-dropdown:hover .custom-dropbtn {
+.custom-navbar a:hover,
+.custom-dropdown:hover .custom-dropbtn {
   background-color: #a73e6f;
 }
 
@@ -94,9 +120,9 @@ button
   position: absolute;
   background-color: #f9f9f9;
   min-width: 160px;
-  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
   z-index: 1;
-} 
+}
 
 .custom-dropdown-content a {
   float: none;
@@ -118,56 +144,60 @@ button
 /* Color legend styles */
 
 #color-legend {
-    position: absolute;
-    top: 45px;          
-    right: 0px;
-    background: transparent;
-    padding: 10px;
-    border: none;
-    border-radius: 5px;
-    box-shadow: none;
-    font-size: 11px;
-    z-index: 1000;
+  position: absolute;
+  top: 0px;
+  right: 0px;
+  background: transparent;
+  padding: 10px;
+  border: none;
+  border-radius: 5px;
+  box-shadow: none;
+  font-size: 11px;
+  z-index: 1000;
 }
 
 #color-legend h4 {
-    margin: 0 0 10px 0;
-    font-size: 13px;
+  margin: 0 0 10px 0;
+  font-size: 13px;
 }
 
 .legend-container {
-    display: flex;              /* puts gradient and labels side by side */
-    align-items: stretch;       /* makes them same height */
+  display: flex;
+  /* puts gradient and labels side by side */
+  align-items: stretch;
+  /* makes them same height */
 }
 
 .legend-gradient {
-    width: 20px;              
-    height: 130px;          
-    background: linear-gradient(
-      to bottom,
+  width: 20px;
+  height: 130px;
+  background: linear-gradient(to bottom,
       rgba(202, 57, 0, 1),
-      rgba(202, 57, 0, 0.1) /* from red (high significance) to transparent (low significance) */
+      rgba(202, 57, 0, 0.1)
+      /* from red (high significance) to transparent (low significance) */
     );
-    border: 1px solid #999;
-    margin-right: 10px;
+  border: 1px solid #999;
+  margin-right: 10px;
 }
 
 .legend-labels {
-    display: flex;
-    flex-direction: column-reverse;   
-    justify-content: space-between;
-    height: 130px;        
-    font-size: 11px;
-    font-weight: bold;
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: space-between;
+  height: 130px;
+  font-size: 11px;
+  font-weight: bold;
 }
 
 /* Pruning popup styles */
 /* New wrapper that breaks out of overflow */
 .popup-wrapper {
-    float: left;
-    position: relative;
-    z-index: 1001;  /* Above other navbar items */
+  float: left;
+  position: relative;
+  z-index: 1001;
+  /* Above other navbar items */
 }
+
 /* Popup container */
 .popup {
   float: left;
@@ -183,19 +213,23 @@ button
 
 /* The actual popup (appears on top) */
 .popup .popuptext {
-    visibility: hidden;
-    min-width: 160px;  /* Minimum width */
-    max-width: 400px;  /* Maximum width */
-    width: max-content;  /* Auto-size to content */
-    background-color: rgb(232, 232, 232);
-    color: black;
-    text-align: left;
-    border-radius: 6px;
-    padding: 12px;
-    position: fixed;
-    z-index: 1002;
-    margin-top: 5px;
-    white-space: nowrap;  /* Keeps text on one line */
+  visibility: hidden;
+  min-width: 160px;
+  /* Minimum width */
+  max-width: 400px;
+  /* Maximum width */
+  width: max-content;
+  /* Auto-size to content */
+  background-color: rgb(232, 232, 232);
+  color: black;
+  text-align: left;
+  border-radius: 6px;
+  padding: 12px;
+  position: fixed;
+  z-index: 1002;
+  margin-top: 5px;
+  white-space: nowrap;
+  /* Keeps text on one line */
 }
 
 
@@ -208,12 +242,71 @@ button
 
 /* Add animation (fade in the popup) */
 @-webkit-keyframes fadeIn {
-  from {opacity: 0;}
-  to {opacity: 1;}
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes fadeIn {
-  from {opacity: 0;}
-  to {opacity:1 ;}
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.main-container {
+
+  margin: 20px 40px;
+  display: grid;
+  gap: 40px;
+  grid-template-columns: 1fr;
+}
+
+.main-form {
+  grid-column: 1;
+}
+
+.info-container {
+  grid-column: 2;
+  margin-right: 90px;
+}
+
+.btn-primary,
+.form-check-input:checked {
+  background-color: #800020;
+  border-color: #800020;
+}
+
+.btn-primary:focus,
+.form-check-input:checked:focus {
+  box-shadow: 0 0 0 0.25rem rgba(128, 0, 32, 0.5);
+  background-color: #800020;
+  border-color: #800020;
+}
+
+.btn-primary:hover,
+.form-check-input:checked:hover {
+  background-color: #a73e6f;
+}
+
+.study-set {
+  font-family: monospace !important;
+}
+
+
+.table {
+  width: auto;
+}
+
+th:nth-child(2), td:nth-child(2) {
+  padding-left: 32px;
+  padding-right: 32px;
 }
 

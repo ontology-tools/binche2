@@ -7,101 +7,113 @@
 {% block body %}
 
 {% if user_study_set %}
-    <h2>You submitted:</h2>
-    <p>{{ user_study_set }}</p>
+<div>
+    <h2 class="mb-3">You submitted:</h2>
+    <p class="lead">{{ user_study_set }}</p>
 
-    <h3>Either choose an existing looping pruning method or configure pruning options below.</h3>
+    <h3 class="mt-4 mb-3">Either choose an existing looping pruning method or configure pruning options below.</h3>
 
-    <form action = "/run_analysis" method = "POST">
+    <form action="/run_analysis" method="POST" class="needs-validation">
         <!-- LOOPING PRUNING METHOD -->
-        <label> 
-            <input type = "radio" name = "looping_prune_method" value = "plain_enrich" required>
-            Plain enrichment pruning strategy (no further selections needed)
-        </label><br>
-        <label>
-            <input type = "radio" name = "looping_prune_method" value = "no_loop_prune">
-            No looping pruning (customise pruning options below)
-        </label><br><br>
-        
+        <div class="mb-4">
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="looping_prune_method" id="plain_enrich" value="plain_enrich" required>
+                <label class="form-check-label" for="plain_enrich">
+                    Plain enrichment pruning strategy (no further selections needed)
+                </label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="looping_prune_method" id="no_loop_prune" value="no_loop_prune">
+                <label class="form-check-label" for="no_loop_prune">
+                    No looping pruning (customise pruning options below)
+                </label>
+            </div>
+        </div>
+
         <!-- P-VALUE CORRECTION METHOD -->
-         <h3>Choose p-value correction method:</h3>
-        <label for="p_value_correction_method">P-value correction method:</label> 
-        <select name ="p_value_correction_method" id="p_value_correction_method">
-            <option value="benjamini_hochberg">Benjamini-Hochberg</option>
-            <option value="bonferroni">Bonferroni</option>
-            <option value="none">None</option>
-        </select>
-        <br><br>
-        
-        <h3>Choose pruning methods:</h3>
+        <h3 class="mt-4 mb-3">Choose p-value correction method:</h3>
+        <div class="mb-4">
+            <label for="p_value_correction_method" class="form-label">P-value correction method:</label>
+            <select name="p_value_correction_method" id="p_value_correction_method" class="form-select" style="max-width: 300px;">
+                <option value="benjamini_hochberg">Benjamini-Hochberg</option>
+                <option value="bonferroni">Bonferroni</option>
+                <option value="none">None</option>
+            </select>
+        </div>
+
+        <h3 class="mt-4 mb-3">Choose pruning methods:</h3>
         <!-- ROOT CHILDREN PRUNE -->
-        <label>
-            <input type="checkbox" name="root_children_prune" value="true"> 
-            Root-children pruning
-        </label><br>
-        <div class="text-muted" style="margin-left:20px; margin-bottom:10px;">
-        Levels (levels to prune including root):
-        <input type="number" name="levels" value="2" min="0" class="form-control" style="width:80px;">
+        <div class="form-check form-switch mb-2">
+            <input type="checkbox" name="root_children_prune" value="true" class="form-check-input"
+                id="root_children_prune">
+            <label for="root_children_prune" class="form-check-label">
+                Root-children pruning
+            </label>
+        </div>
+        <div class="mb-4 ms-4">
+            <label for="levels" class="form-label small text-muted">Levels (levels to prune including root):</label>
+            <input type="number" name="levels" id="levels" value="2" min="0" class="form-control" style="max-width:150px;">
         </div>
 
 
         <!-- LINEAR BRANCH PRUNE -->
-        <label>
-            <input type="checkbox" name="linear_branch_prune" value="true"> 
-            Linear branch pruning
-        </label><br>
-        <div class="text-muted" style="margin-left:20px; margin-bottom:10px;">
-        n (Keeps every n:th node in the branch. n=0 removes all intermediate nodes):
-        <input type ="number" name="linear_branch_n" value ="2" min="0" class="form-control" style="width:80px;">
+        <div class="form-check form-switch mb-2">
+            <input type="checkbox" name="linear_branch_prune" value="true" class="form-check-input"
+                id="linear_branch_prune">
+            <label for="linear_branch_prune" class="form-check-label">
+                Linear branch pruning
+            </label>
+        </div>
+        <div class="mb-4 ms-4">
+            <label for="linear_branch_n" class="form-label small text-muted">n (Keeps every n:th node in the branch. n=0 removes all intermediate nodes):</label>
+            <input type="number" name="linear_branch_n" id="linear_branch_n" value="2" min="0" class="form-control" style="max-width:150px;">
         </div>
 
         <!-- HIGH P-VALUE PRUNE -->
-        <label>
-            <input type="checkbox" name="high_p_value_prune" value="true"> 
-            High p-value pruning    
-        </label><br>
-        <div class="text-muted" style="margin-left:20px; margin-bottom:10px;">
-        <label>
-            p-value threshold (a node with a higher p-value will be still be kept if it has a descendant with a p-value below the threshold):
-        <input type="number" w
-            name="p_value_threshold" 
-            value="0.05" 
-            step="0.01" 
-            min="0" 
-            max="1" 
-            class="form-control" 
-            style="width:80px;">
-        </label>
+        <div class="form-check form-switch mb-2">
+            <input type="checkbox" name="high_p_value_prune" value="true" class="form-check-input"
+                id="high_p_value_prune">
+            <label for="high_p_value_prune" class="form-check-label">
+                High p-value pruning
+            </label>
+        </div>
+        <div class="mb-4 ms-4">
+            <label for="p_value_threshold" class="form-label small text-muted">
+                p-value threshold (a node with a higher p-value will be still be kept if it has a descendant with a
+                p-value below the threshold):
+            </label>
+            <input type="number" name="p_value_threshold" id="p_value_threshold" value="0.05" step="0.01" min="0" max="1"
+                class="form-control" style="max-width:150px;">
         </div>
 
-        <!-- ZERO DEGREE PRUNE --> 
-        <label>
-            <input type="checkbox" name="zero_degree_prune" value="true"> 
-            Zero-degree pruning
-        </label><br>
+        <!-- ZERO DEGREE PRUNE -->
+        <div class="form-check form-switch mb-4">
+            <input type="checkbox" name="zero_degree_prune" value="true" class="form-check-input"
+                id="zero_degree_prune">
+            <label for="zero_degree_prune" class="form-check-label">
+                Zero-degree pruning
+            </label>
+        </div>
 
-        <button type = "submit"
-         style="display:inline-block; padding:8px 16px; margin-top:20px; 
-          background:#4CAF50; color: white; text-decoration:none; 
-          border-radius:4px;"> 
-          Run Analysis</button>
-
+        <div class="mt-4 mb-3">
+            <button type="submit" class="btn btn-success me-2">
+                Run Analysis
+            </button>
+            <a class="btn btn-primary" href="/">
+                Change submission
+            </a>
+        </div>
     </form>
-
-    <a href="/" 
-   style="display:inline-block; padding:8px 16px; margin-top:20px; 
-          background:#0f808d; color: white; text-decoration:none; 
-          border-radius:4px; cursor: pointer;">
-    Change submission
-    </a>
-{% else %}
-    <h2>No study set submitted.</h2>
-    <a href="/"
-    style="display:inline-block; padding:8px 16px; margin-top:20px; 
-             background:#0f808d; color: white; text-decoration:none; 
-             border-radius:4px;">
-    Back to homepage
-{% endif %}
+    {% else %}
+    <div class="alert alert-warning mt-4" role="alert">
+        <h2 class="alert-heading">No study set submitted.</h2>
+        <hr>
+        <a href="/" class="btn btn-primary">
+            Back to homepage
+        </a>
+    </div>
+    {% endif %}
+</div>
 
 
 

@@ -5,47 +5,64 @@
 {% endblock %}
 
 {% block body %}
-<h1>Welcome to BinChe2</h1>
-<p>You can insert your study set below.</p>
-<p>Example submission:
-    CHEBI_77030, CHEBI_79036
-</p>
 
-<form action = "/submission" method = "POST">
-    <h4>Input Study Set:</h4>
-    <textarea name = "study_set" rows="20" cols="100" placeholder="Enter your study set here"></textarea>
+    <div class="main-container">
 
-    <br><br>
-    <h4>Specify Target of Enrichment:</h4>
-    <label>
-        <input type="radio" name="classification" value="structural" required> 
-        Structure
-    </label><br>
-    <label>
-        <input type="radio" name="classification" value="functional"> 
-        Role
-    </label><br>
-    <label>
-    <input type="radio" name="classification" value="full">
-        Both
-    </label><br>
-    
-    <button type = "submit">Submit</button>
-</form>
-<br>
-<h3>About Selecting Target of Enrichment</h3>
-<p>
-    <strong>ChEBI structure classification:</strong> The structure classification describes a molecular entity based on its composition and/or the connectivity between its constituent atoms.
-    <br>
-    <strong>ChEBI role classification:</strong> The role classification describes the role of a molecular entity within a biological context and/or its intended use by humans.
-    <br>
-    <strong>ChEBI structure and role classification:</strong> The structure and role classification is the union of both classifications. Note that the structure classification is significantly larger than the role classification.
-    <br>
-</p>
-<!-- The text above is copied directly from Binche ReadMe-->
- 
-<p>Your selected target of enrichment has to include your study set for correct calculations.</p>
+    <form action="/submission" method="POST" class="main-form">
 
 
+        <h4 class="mb-4">Input Study Set:</h4>
+
+        <p>You can insert your study set below.</p>
+        <p>Example submission:
+        <pre>
+CHEBI:77030
+CHEBI:79036
+            </pre>
+
+        </p>
+        <textarea name="study_set" class="study-set" rows="20" cols="90"
+            placeholder="Enter your study set here"></textarea>
+
+        <br><br>
+        <h4>Specify Target of Enrichment:</h4>
+
+        <div class="form-chek">
+            <input type="radio" name="classification" value="structural" required class="form-check-input">
+            <label for="" class="form-check-label">Structure</label>
+        </div>
+        <div class="form-chek">
+            <input type="radio" name="classification" value="functional" class="form-check-input">
+            <label for="" class="form-check-label">Role</label>
+        </div>
+        <div class="form-chek">
+            <input type="radio" name="classification" value="full" class="form-check-input">
+            <label for="" class="form-check-label">Both</label>
+        </div>
+
+        <button class="btn btn-primary" type="submit">Submit</button>
+    </form>
+
+    <div class="info-container">
+        <h4 class="mb-4">About Selecting Target of Enrichment</h4>
+        <p>
+            <strong>ChEBI structure classification:</strong> The structure classification describes a molecular entity
+            based on its composition and/or the connectivity between its constituent atoms.
+        </p>
+        <p>
+            <strong>ChEBI role classification:</strong> The role classification describes the role of a molecular entity
+            within a biological context and/or its intended use by humans.
+        </p>
+        <p>
+            <strong>ChEBI structure and role classification:</strong> The structure and role classification is the union
+            of both classifications. Note that the structure classification is significantly larger than the role
+            classification.
+            <br>
+        </p>
+        <!-- The text above is copied directly from Binche ReadMe-->
+
+
+        <p>Your selected target of enrichment has to include your study set for correct calculations.</p>
+    </div>
+    </div>
 {% endblock %}
-
