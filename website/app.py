@@ -7,10 +7,24 @@ from visualitations_and_pruning import graph_to_cytospace_json
 import re
 import csv
 from io import StringIO
+import uuid
+import time
+import glob
+import uuid
 
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Replace with a secure secret key
+
+def cleanup_old_graph_files(max_age_hours=24):
+    """Remove graph files older than max_age_hours"""
+    cutoff = time.time() - (max_age_hours * 3600)
+    for filepath in glob.glob('website/static/data/graph_*.json'):
+        try:
+            if os.path.getmtime(filepath) < cutoff:
+                os.remove(filepath)
+        except OSError:
+            pass
 
 
 @app.route('/')
@@ -55,6 +69,12 @@ def map_p_value_correction_method(method_name):
 @app.route('/run_analysis', methods=['GET', 'POST'])
 # option to choose pruning methods
 def run_analysis():
+    # Cleanup old graph files
+    cleanup_old_graph_files(max_age_hours=24)
+    
+    # Generate or retrieve session ID
+    if 'session_id' not in session:
+        session['session_id'] = str(uuid.uuid4())
 
     raw_studyset = session.get('study_set')
     if not raw_studyset:
@@ -70,8 +90,9 @@ def run_analysis():
         results, pruned_G = run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
                                                 classification=session.get('classification'))
         # Save JSON representation of pruned_G in session for graph visualization
-        graph_json_file = 'website/static/data/graph.json'
+        graph_json_file = f'website/static/data/graph_{session["session_id"]}.json'
         graph_to_cytospace_json(pruned_G, graph_json_file, results)
+        session['graph_file'] = f'graph_{session["session_id"]}.json'
 
         session['pruning'] = {
             'method': 'plain_enrich'
@@ -105,8 +126,9 @@ def run_analysis():
                                        classification=session.get('classification'))
                                        
     # Save JSON representation of pruned_G in session for graph visualization
-    graph_json_file = 'website/static/data/graph.json'
+    graph_json_file = f'website/static/data/graph_{session["session_id"]}.json'
     graph_to_cytospace_json(pruned_G, graph_json_file, results)
+    session['graph_file'] = f'graph_{session["session_id"]}.json'
 
     session['pruning'] = {
         'method': 'custom',
@@ -128,9 +150,14 @@ def run_analysis():
 
 @app.route('/graph')
 def graph():
+    session_id = session.get('session_id')
+    graph_file = f'graph_{session_id}.json' if session_id else 'graph.json'
     pruning = session.get('pruning', {})
     correction_method = session.get('correction_method', {})
-    return render_template('graph.html', pruning=pruning, correction_method=correction_method)
+    return render_template('graph.html', 
+                         graph_file=graph_file,
+                         pruning=pruning, 
+                         correction_method=correction_method)
 
 
 

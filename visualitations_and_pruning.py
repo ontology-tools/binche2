@@ -1,6 +1,6 @@
 import os
 import networkx as nx
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from load_chebi import load_ontology, load_chebi
 from matplotlib.patches import Ellipse
 import xml.etree.ElementTree as ET
@@ -233,45 +233,45 @@ def create_graph_from_map_original(classes, parent_map_json_file, max_n_leaf_cla
 
 
 
-def draw_graph(G, graphing_layout, title):
-    if graphing_layout == "default":
-        pos = None  # Default layout
-    elif graphing_layout == "kamada_kawai":
-        pos = nx.kamada_kawai_layout(G)
-    elif graphing_layout == "spectral":
-        pos = nx.spectral_layout(G)
-    elif graphing_layout == "layer_based":
-        # Calculate depth of each node from root
-        roots = [n for n, d in G.in_degree() if d == 0]
-        if roots:
-            # Assign layer based on shortest path from root
-            layers = {}
-            for node in G.nodes():
-                min_dist = float('inf')
-                for root in roots:
-                    if nx.has_path(G, root, node):
-                        dist = nx.shortest_path_length(G, root, node)
-                        min_dist = min(min_dist, dist)
-                layers[node] = min_dist if min_dist != float('inf') else 0
+# def draw_graph(G, graphing_layout, title):
+#     if graphing_layout == "default":
+#         pos = None  # Default layout
+#     elif graphing_layout == "kamada_kawai":
+#         pos = nx.kamada_kawai_layout(G)
+#     elif graphing_layout == "spectral":
+#         pos = nx.spectral_layout(G)
+#     elif graphing_layout == "layer_based":
+#         # Calculate depth of each node from root
+#         roots = [n for n, d in G.in_degree() if d == 0]
+#         if roots:
+#             # Assign layer based on shortest path from root
+#             layers = {}
+#             for node in G.nodes():
+#                 min_dist = float('inf')
+#                 for root in roots:
+#                     if nx.has_path(G, root, node):
+#                         dist = nx.shortest_path_length(G, root, node)
+#                         min_dist = min(min_dist, dist)
+#                 layers[node] = min_dist if min_dist != float('inf') else 0
             
-            # Set subset attribute for multipartite layout
-            nx.set_node_attributes(G, layers, 'subset')
-            pos = nx.multipartite_layout(G, subset_key='subset', align='horizontal')
-    else:
-        print(f"Unknown graphing layout: {graphing_layout}. Using default.")
-        pos = None  # Default layout
+#             # Set subset attribute for multipartite layout
+#             nx.set_node_attributes(G, layers, 'subset')
+#             pos = nx.multipartite_layout(G, subset_key='subset', align='horizontal')
+#     else:
+#         print(f"Unknown graphing layout: {graphing_layout}. Using default.")
+#         pos = None  # Default layout
 
 
-    plt.figure(figsize=(20, 10))
+#     plt.figure(figsize=(20, 10))
 
-    # Draw nodes with their assigned colors
-    node_colors = [G.nodes[n].get("color") for n in G.nodes()]
+#     # Draw nodes with their assigned colors
+#     node_colors = [G.nodes[n].get("color") for n in G.nodes()]
 
-    nx.draw(G, pos, with_labels=True, node_size=500, node_shape='s', font_size=8, font_weight='bold', node_color=node_colors, arrows=True,
-            arrowsize=12, edge_color='black', alpha=1)
+#     nx.draw(G, pos, with_labels=True, node_size=500, node_shape='s', font_size=8, font_weight='bold', node_color=node_colors, arrows=True,
+#             arrowsize=12, edge_color='black', alpha=1)
 
-    plt.title(title, fontsize=12)
-    plt.show()
+#     plt.title(title, fontsize=12)
+#     plt.show()
 
 #####################################
 # Pruning strategies

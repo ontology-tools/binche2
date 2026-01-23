@@ -18,26 +18,28 @@
         <pre>
 CHEBI:77030
 CHEBI:79036
-            </pre>
+         </pre>
 
         </p>
-        <textarea name="study_set" class="study-set" rows="20" cols="90"
+        <textarea name="study_set" class="study-set" rows="20" cols="80"
             placeholder="Enter your study set here"></textarea>
 
         <br><br>
         <h4>Specify Target of Enrichment:</h4>
 
-        <div class="form-chek">
-            <input type="radio" name="classification" value="structural" required class="form-check-input">
-            <label for="" class="form-check-label">Structure</label>
-        </div>
-        <div class="form-chek">
-            <input type="radio" name="classification" value="functional" class="form-check-input">
-            <label for="" class="form-check-label">Role</label>
-        </div>
-        <div class="form-chek">
-            <input type="radio" name="classification" value="full" class="form-check-input">
-            <label for="" class="form-check-label">Both</label>
+        <div class="mb-3">
+            <div class="form-chek">
+                <input type="radio" name="classification" value="structural" required class="form-check-input">
+                <label for="" class="form-check-label">Structure</label>
+            </div>
+            <div class="form-chek">
+                <input type="radio" name="classification" value="functional" class="form-check-input">
+                <label for="" class="form-check-label">Role</label>
+            </div>
+            <div class="form-chek">
+                <input type="radio" name="classification" value="full" class="form-check-input">
+                <label for="" class="form-check-label">Both</label>
+            </div>
         </div>
 
         <button class="btn btn-primary" type="submit">Submit</button>
@@ -54,7 +56,7 @@ CHEBI:79036
             within a biological context and/or its intended use by humans.
         </p>
         <p>
-            <strong>ChEBI structure and role classification:</strong> The structure and role classification is the union
+            <strong>ChEBI structure and role classification ("Both"):</strong> The structure and role classification is the union
             of both classifications. Note that the structure classification is significantly larger than the role
             classification.
             <br>
@@ -62,7 +64,7 @@ CHEBI:79036
         <!-- The text above is copied directly from Binche ReadMe-->
 
 
-        <p>Your selected target of enrichment has to include your study set for correct calculations.</p>
+        <p>Your selected target of enrichment should include your study set for correct calculations.</p>
     </div>
     </div>
 {% endblock %}

@@ -275,6 +275,7 @@ button
 
 .info-container {
   grid-column: 2;
+  margin-left: 40px;
   margin-right: 90px;
 }
 
@@ -290,10 +291,18 @@ button
   background-color: #800020;
   border-color: #800020;
 }
+.btn-primary:active,
+.btn-primary:focus-visible,
+.btn-primary:active:focus {
+  background-color: #800020 !important;
+  border-color: #800020 !important;
+  box-shadow: 0 0 0 0.25rem rgba(128, 0, 32, 0.5) !important;
+}
 
 .btn-primary:hover,
 .form-check-input:checked:hover {
-  background-color: #a73e6f;
+  background-color: #8d5670;
+  border-color: #8d5670;
 }
 
 .study-set {

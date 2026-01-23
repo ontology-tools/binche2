@@ -49,7 +49,6 @@
         <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-unselected">Show selected only</a></li>
         <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-selected">Hide selected</a></li>
         <li><a href="#" class="dropdown-item show-hide-option" data-action="show-all">Show all nodes</a></li>
-        <li><hr class="dropdown-divider"></li>
         <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-non-significant">Hide non-significant nodes</a></li>
         <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-leaves">Hide/Show leaf nodes</a></li>
         <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-labels">Hide/Show labels</a></li>
@@ -90,7 +89,7 @@
 
 
 <script>
-    fetch("{{url_for('static', filename='data/graph.json')}}")
+    fetch("{{url_for('static', filename='data/' ~ graph_file)}}")
     .then(response => response.json())
     .then(data => {
         var cy = cytoscape({

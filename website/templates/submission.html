@@ -7,11 +7,16 @@
 {% block body %}
 
 {% if user_study_set %}
-<div>
-    <h2 class="mb-3">You submitted:</h2>
-    <p class="lead">{{ user_study_set }}</p>
+<div style="padding: 20px 40px;">
+    <h3 class="mb-3">You submitted:</h3>
+    <p class="mb-4 text-body">{{ user_study_set.replace('\r\n', ', ').replace('\n', ', ') }}</p>
+    <!-- <pre class="study-set mb-4">{{ user_study_set }}</pre> -->
 
-    <h3 class="mt-4 mb-3">Either choose an existing looping pruning method or configure pruning options below.</h3>
+    <h3 class="mt-4 mb-3">Pruning Strategies:</h3>
+    <p>
+    Either choose an existing looping pruning strategy or configure pruning options and correction method
+    manually below.
+    </p>
 
     <form action="/run_analysis" method="POST" class="needs-validation">
         <!-- LOOPING PRUNING METHOD -->
@@ -25,13 +30,13 @@
             <div class="form-check">
                 <input class="form-check-input" type="radio" name="looping_prune_method" id="no_loop_prune" value="no_loop_prune">
                 <label class="form-check-label" for="no_loop_prune">
-                    No looping pruning (customise pruning options below)
+                    No looping pruning (customise options below)
                 </label>
             </div>
         </div>
 
         <!-- P-VALUE CORRECTION METHOD -->
-        <h3 class="mt-4 mb-3">Choose p-value correction method:</h3>
+        <h4 class="mt-4 mb-3">Choose p-value correction method:</h4>
         <div class="mb-4">
             <label for="p_value_correction_method" class="form-label">P-value correction method:</label>
             <select name="p_value_correction_method" id="p_value_correction_method" class="form-select" style="max-width: 300px;">
@@ -41,7 +46,7 @@
             </select>
         </div>
 
-        <h3 class="mt-4 mb-3">Choose pruning methods:</h3>
+        <h4 class="mt-4 mb-3">Choose pruning methods:</h4>
         <!-- ROOT CHILDREN PRUNE -->
         <div class="form-check form-switch mb-2">
             <input type="checkbox" name="root_children_prune" value="true" class="form-check-input"
@@ -96,12 +101,9 @@
         </div>
 
         <div class="mt-4 mb-3">
-            <button type="submit" class="btn btn-success me-2">
+            <button type="submit" class="btn btn-primary">
                 Run Analysis
             </button>
-            <a class="btn btn-primary" href="/">
-                Change submission
-            </a>
         </div>
     </form>
     {% else %}
