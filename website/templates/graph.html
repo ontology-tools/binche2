@@ -50,7 +50,6 @@
         <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-selected">Hide selected</a></li>
         <li><a href="#" class="dropdown-item show-hide-option" data-action="show-all">Show all nodes</a></li>
         <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-non-significant">Hide non-significant nodes</a></li>
-        <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-leaves">Hide/Show leaf nodes</a></li>
         <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-labels">Hide/Show labels</a></li>
     </ul>
 </li>
@@ -379,7 +378,18 @@
         });
         });
 
-        // Show/hide nodes
+        // Hide leaf nodes with no p-value (all proper leaves)
+        cy.nodes().forEach(node => {
+            const p = node.data('p_value_corrected') ?? node.data('p_value');
+            // If p-value is not available, check if it is a leaf by indegree. If so, hide it.
+            if (p == null && node.indegree() === 0) {
+                node.style('display', 'none');
+                // Also hide connected edges
+                node.connectedEdges().style('display', 'none');
+            }
+        });
+
+        // Show/hide nodes when respective menu item is clicked
         document.querySelectorAll('.show-hide-option').forEach(item => {
             item.addEventListener('click', e => {
                 e.preventDefault(); // stop link navigation
@@ -405,6 +415,15 @@
                         // Show all nodes and edges
                         cy.nodes().style('display', 'element');
                         cy.edges().style('display', 'element');
+                        
+                        // Hide leaf nodes with no p-value (all proper leaves)
+                        cy.nodes().forEach(node => {
+                            const p = node.data('p_value_corrected') ?? node.data('p_value');
+                            if (p == null && node.indegree() === 0) {
+                                node.style('display', 'none');
+                                node.connectedEdges().style('display', 'none');
+                            }
+                        });
                         break;
 
                     case 'hide-labels':
@@ -431,19 +450,6 @@
                             }
                         });
                         break;
-
-                    case 'hide-leaves':
-                        // Only hides the study set leaf nodes
-                        cy.nodes().forEach(node=> {
-                            if (node.indegree() === 0) { // indegree 0
-                                const isHidden = node.style('display') === 'none';
-                                node.style('display', isHidden ? 'element' : 'none');
-                                // Also toggle connected edges
-                                node.connectedEdges().style('display', isHidden ? 'element' : 'none');
-                            }
-                        });
-                        break;
- 
 
                 }
             });
