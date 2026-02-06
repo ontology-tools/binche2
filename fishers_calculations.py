@@ -43,7 +43,7 @@ def calculate_p_value(n_ss_annotated, n_ss_leaves, n_bg_annotated, n_bg_leaves):
     c = n_bg_annotated - n_ss_annotated
     d = n_bg_leaves - n_bg_annotated - b
     odds, p = fisher_exact([[a, b], [c, d]], alternative='greater')
-    # ‘greater’: the odds ratio of the underlying population is greater than one
+    # ‘greater’: thget_ne odds ratio of the underlying population is greater than one
     return odds, p
 
 def get_leaves(studyset_list, leaves_csv, class_to_leaf_map):
@@ -78,7 +78,7 @@ def get_ancestors_for_inputs(studyset_leaves, leaf_to_all_parents_map_json):
     return studyset_ancestors
 
 
-def get_n_ss_annotated(studyset_leaves, class_to_check, class_to_leaf_map):
+def get_n_ss_annotated(studyset_leaves, class_to_check, class_to_leaf_map, classification, class_to_all_roles_map, roles_to_leaves_map):
     """
     n_ss_annotated = number of input classes that are leaf descendants of the given class.
 
@@ -87,19 +87,32 @@ def get_n_ss_annotated(studyset_leaves, class_to_check, class_to_leaf_map):
     map_file: JSON file mapping each class to all its leaf descendants
     """
 
-    # descendants of the class we are calculating enrichment for
-    leaf_descendants = set(class_to_leaf_map.get(class_to_check, []))
+    if classification not in ["structural", "functional", "full"]:
+        print("Classification must be either 'structural', 'functional' or 'full'.")
+        return 0
+
+    leaves = set()
+
+    if classification in ["structural", "full"]:
+        # descendants of the class we are calculating enrichment for
+        leaf_descendants = set(class_to_leaf_map.get(class_to_check, []))
+        leaves.update(leaf_descendants)
+
+    if classification in ["functional", "full"]:
+        # Get all roles (direct + inherited from ancestors + role ancestors)
+        all_roles = class_to_all_roles_map.get(class_to_check, [])
+        for role in all_roles:
+            leaves.update(roles_to_leaves_map.get(role, []))
 
     # count how many study classes appear in those leaf descendants
-    # n_ss_annotated = sum(cls in leaf_descendants for cls in studyset_leaves)
-    n_ss_annotated = len(leaf_descendants.intersection(set(studyset_leaves)))
+    n_ss_annotated = len(leaves.intersection(set(studyset_leaves)))
 
     return n_ss_annotated
 
-def get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map, check_leaf_classes = False):
+def get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map, class_to_all_roles_map, roles_to_leaves_map):
 
     #n_bg_leaves and n_ss_leaves will be the same for all classes
-    n_bg_leaves = count_removed_leaves(removed_leaves_csv, classification)
+    n_bg_leaves = count_removed_leaves(removed_leaves_csv)
     n_ss_leaves = len(studyset_leaves)
 
     results =  {} # dictionary to hold results
@@ -108,10 +121,27 @@ def get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, s
 
         # print(f"Calculating enrichment for class {class_to_check}...")
 
-        _, n_bg_annotated = count_removed_classes_for_class(class_to_check, class_to_leaf_map, classification, check_leaf_classes, removed_leaves_csv)
-        n_ss_annotated = get_n_ss_annotated(studyset_leaves, class_to_check, class_to_leaf_map)
+        _, n_bg_annotated = count_removed_classes_for_class(
+            class_to_check,
+            class_to_leaf_map,
+            classification,
+            class_to_all_roles_map,
+            roles_to_leaves_map,
+        )
+        n_ss_annotated = get_n_ss_annotated(
+            studyset_leaves,
+            class_to_check,
+            class_to_leaf_map,
+            classification,
+            class_to_all_roles_map,
+            roles_to_leaves_map,
+        )
 
         odds, p_value = calculate_p_value(n_ss_annotated, n_ss_leaves, n_bg_annotated, n_bg_leaves)
+
+        # Debug output
+        # if n_ss_annotated == 0 or n_bg_annotated == 0:
+            # print(f"DEBUG {class_to_check}: n_ss_annotated={n_ss_annotated}, n_bg_annotated={n_bg_annotated}, p={p_value}")
 
         results[class_to_check]={
             "class": id_to_name(class_to_check),
@@ -167,9 +197,15 @@ def run_enrichment_analysis(studyset_list,
     leaf_to_ancestors_map_file = "data/removed_leaf_classes_to_ALL_parents_map.json"
     class_to_leaf_map_file = "data/class_to_leaf_descendants_map.json"
     parent_map_file = "data/chebi_parent_map.json"
+    class_to_all_roles_map_json = "data/class_to_all_roles_map.json"
+    roles_to_leaves_map_json = "data/roles_to_leaves_map.json"
 
     with open(class_to_leaf_map_file, 'r') as f:
         class_to_leaf_map = json.load(f)
+    with open(class_to_all_roles_map_json, 'r') as f:
+        class_to_all_roles_map = json.load(f)
+    with open(roles_to_leaves_map_json, 'r') as f:
+        roles_to_leaves_map = json.load(f)
 
     # Currently the code is working with the whole chebi iri needed. Make sure the input study set is in the same format (fixed for the website)
     if not studyset_list[0].startswith("http://purl.obolibrary.org/obo/"):
@@ -229,7 +265,15 @@ def run_enrichment_analysis(studyset_list,
         studyset_ancestors = studyset_ancestors_all
 
     time_start_total = time.time()
-    enrichment_results = get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map, check_leaf_classes)
+    enrichment_results = get_enrichment_values(
+        removed_leaves_csv,
+        classification,
+        studyset_leaves,
+        studyset_ancestors,
+        class_to_leaf_map,
+        class_to_all_roles_map,
+        roles_to_leaves_map,
+    )
     time_end_total = time.time()
     print(f"Total time to get enrichment values: {time_end_total - time_start_total} seconds")
 
@@ -325,9 +369,15 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
     leaf_to_ancestors_map_file = "data/removed_leaf_classes_to_ALL_parents_map.json"
     class_to_leaf_map_file = "data/class_to_leaf_descendants_map.json"
     parent_map_file = "data/chebi_parent_map.json"
+    class_to_all_roles_map_json = "data/class_to_all_roles_map.json"
+    roles_to_leaves_map_json = "data/roles_to_leaves_map.json"
 
     with open(class_to_leaf_map_file, 'r') as f:
         class_to_leaf_map = json.load(f)
+    with open(class_to_all_roles_map_json, 'r') as f:
+        class_to_all_roles_map = json.load(f)
+    with open(roles_to_leaves_map_json, 'r') as f:
+        roles_to_leaves_map = json.load(f)
 
     if not studyset_list[0].startswith("http://purl.obolibrary.org/obo/"):
         studyset_list = [f"http://purl.obolibrary.org/obo/{cls}" for cls in studyset_list]
@@ -341,7 +391,15 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
 
     all_removed_nodes = set()
 
-    enrichment_results = get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map, check_leaf_classes)
+    enrichment_results = get_enrichment_values(
+        removed_leaves_csv,
+        classification,
+        studyset_leaves,
+        studyset_ancestors,
+        class_to_leaf_map,
+        class_to_all_roles_map,
+        roles_to_leaves_map,
+    )
 
     print("Enrichment results:")
     print_enrichment_results(enrichment_results)
@@ -366,7 +424,6 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
     G, removed_nodes, execution_count = root_children_pruner(G, levels, allow_re_execution = False, execution_count = 0)
     all_removed_nodes.update(removed_nodes)
     print(f"Removed nodes by root children pruner: {removed_nodes}")
-
 
     ## Loop phase ##
     print("Starting loop pruning phase.")
@@ -409,6 +466,7 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
         first_iteration = False
 
     ## No final phase pruners ##
+
     final_enrichment = current_enrichment
 
     print(f"Number of removed nodes in total: {len(all_removed_nodes)}")
@@ -421,12 +479,6 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
     return results, G
 
 
-
-# OBS: in Binche1, this would be the input (adapt code to follow this?):
-
-# String ontologyFile = binchePrefs.get(BiNChEOntologyPrefs.RoleAndStructOntology.name(), null);
-# // the input path points to a file where the list of ChEBI IDs (one per line, CHEBI:03432) are stored.
-# String elementsForEnrichFile = inputPath;
 
 if __name__ == "__main__":
 
@@ -447,7 +499,7 @@ if __name__ == "__main__":
     zero_degree_prune = True
 
 
-    classification = "structural" # "functional" or "structural" or "full"
+    classification = "functional" # "functional" or "structural" or "full"
     check_leaf_classes = False # Checks that the found the leaf classes are of the expected type (Functional or Structural). If the classification is correct, 
                                 # this should never be a problem and can be set to False.
 
@@ -457,6 +509,7 @@ if __name__ == "__main__":
     #studyset_list =["http://purl.obolibrary.org/obo/CHEBI_17234"]
     # studyset_list =["http://purl.obolibrary.org/obo/CHEBI_37626"]
     studyset_list =["http://purl.obolibrary.org/obo/CHEBI_77030"]
+
 
     results = run_enrichment_analysis(studyset_list,
                             bonferroni_correct=bonferroni_correct,
