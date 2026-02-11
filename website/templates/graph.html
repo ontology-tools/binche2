@@ -46,9 +46,11 @@
         <i class="fa fa-eye"></i> Show/Hide
     </a>
     <ul class="dropdown-menu" aria-labelledby="showHideDropdown">
+        <li><a href="#" class="dropdown-item show-hide-option" data-action="show-significant-with-paths">Show most relevant paths only</a></li>
+        <li><a href="#" class="dropdown-item show-hide-option" data-action="show-all">Show all nodes</a></li>
+        <li><hr class="dropdown-divider"></li>
         <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-unselected">Show selected only</a></li>
         <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-selected">Hide selected</a></li>
-        <li><a href="#" class="dropdown-item show-hide-option" data-action="show-all">Show all nodes</a></li>
         <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-non-significant">Hide non-significant nodes</a></li>
         <li><a href="#" class="dropdown-item show-hide-option" data-action="hide-labels">Hide/Show labels</a></li>
     </ul>
@@ -378,15 +380,61 @@
         });
         });
 
-        // Hide leaf nodes with no p-value (all proper leaves)
-        cy.nodes().forEach(node => {
+        // Default view: Show only significant nodes (p <= 0.05) with their paths to roots
+        // If no significant nodes exist, fall back to nodes with p < 1
+        
+        // First, hide all nodes and edges
+        cy.nodes().style('display', 'none');
+        cy.edges().style('display', 'none');
+        
+        // Find all significant nodes (p <= 0.05)
+        let significantNodes = cy.nodes().filter(node => {
             const p = node.data('p_value_corrected') ?? node.data('p_value');
-            // If p-value is not available, check if it is a leaf by indegree. If so, hide it.
-            if (p == null && node.indegree() === 0) {
-                node.style('display', 'none');
-                // Also hide connected edges
-                node.connectedEdges().style('display', 'none');
-            }
+            return p != null && p <= 0.05;
+        });
+        
+        // If no significant nodes found, use nodes with p < 1 instead
+        if (significantNodes.length === 0) {
+            significantNodes = cy.nodes().filter(node => {
+                const p = node.data('p_value_corrected') ?? node.data('p_value');
+                return p != null && p < 1;
+            });
+        }
+        
+        // Set to track all nodes to display
+        const nodesToShow = new Set();
+        
+        // For each significant node, find all paths to roots and mark nodes
+        significantNodes.forEach(sigNode => {
+            nodesToShow.add(sigNode.id());
+            
+            // Traverse upward to find all ancestors (parents) until reaching a root
+            const traverseToRoot = (node) => {
+                // Get outgoing edges (to parents in this directed graph)
+                const parentEdges = node.outgoers('edge');
+                
+                parentEdges.forEach(edge => {
+                    const parent = edge.target();
+                    if (!nodesToShow.has(parent.id())) {
+                        nodesToShow.add(parent.id());
+                        traverseToRoot(parent); // Recursively traverse
+                    }
+                });
+            };
+            
+            traverseToRoot(sigNode);
+        });
+        
+        // Show the nodes and their connecting edges
+        nodesToShow.forEach(nodeId => {
+            const node = cy.getElementById(nodeId);
+            node.style('display', 'element');
+            // Show edges between visible nodes
+            node.connectedEdges().forEach(edge => {
+                if (nodesToShow.has(edge.source().id()) && nodesToShow.has(edge.target().id())) {
+                    edge.style('display', 'element');
+                }
+            });
         });
 
         // Show/hide nodes when respective menu item is clicked
@@ -453,6 +501,65 @@
                                 // Also hide connected edges
                                 node.connectedEdges().style('display', 'none');
                             }
+                        });
+                        break;
+
+                    case 'show-significant-with-paths':
+                        // Show only significant nodes (p <= 0.05) plus all nodes on paths connecting them to roots
+                        // If no significant nodes exist, fall back to nodes with p < 1
+                        
+                        // First, hide all nodes and edges
+                        cy.nodes().style('display', 'none');
+                        cy.edges().style('display', 'none');
+                        
+                        // Find all significant nodes (p <= 0.05)
+                        let significantNodes = cy.nodes().filter(node => {
+                            const p = node.data('p_value_corrected') ?? node.data('p_value');
+                            return p != null && p <= 0.05;
+                        });
+                        
+                        // If no significant nodes found, use nodes with p < 1 instead
+                        if (significantNodes.length === 0) {
+                            significantNodes = cy.nodes().filter(node => {
+                                const p = node.data('p_value_corrected') ?? node.data('p_value');
+                                return p != null && p < 1;
+                            });
+                        }
+                        
+                        // Set to track all nodes to display
+                        const nodesToShow = new Set();
+                        
+                        // For each significant node, find all paths to roots and mark nodes
+                        significantNodes.forEach(sigNode => {
+                            nodesToShow.add(sigNode.id());
+                            
+                            // Traverse upward to find all ancestors (parents) until reaching a root
+                            const traverseToRoot = (node) => {
+                                // Get outgoing edges (to parents in this directed graph)
+                                const parentEdges = node.outgoers('edge');
+                                
+                                parentEdges.forEach(edge => {
+                                    const parent = edge.target();
+                                    if (!nodesToShow.has(parent.id())) {
+                                        nodesToShow.add(parent.id());
+                                        traverseToRoot(parent); // Recursively traverse
+                                    }
+                                });
+                            };
+                            
+                            traverseToRoot(sigNode);
+                        });
+                        
+                        // Show the nodes and their connecting edges
+                        nodesToShow.forEach(nodeId => {
+                            const node = cy.getElementById(nodeId);
+                            node.style('display', 'element');
+                            // Show edges between visible nodes
+                            node.connectedEdges().forEach(edge => {
+                                if (nodesToShow.has(edge.source().id()) && nodesToShow.has(edge.target().id())) {
+                                    edge.style('display', 'element');
+                                }
+                            });
                         });
                         break;
 

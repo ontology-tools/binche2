@@ -103,10 +103,10 @@ Pruning options are available for the possibility to make the graph less cluster
 
 There is either the option to choose which pruning options that will be applied. The chosen srategies will then be implemented ones each. Alternatively, different pruning options can be implemented in a looping manner. There is first a pre-loop phase where pruners are applied ones, and thereafter a loop-phase where pruners are applied until in a loop until no more changes are made.
 
-* **Plain Enrichment pruning strategy**: The pre-loop phase applies the high p-value branch pruner (with a threshold of 0.5), the linear branch collapser pruner (with n = 0), and the root children pruner (levels = 2). The loop-phase applies the high p-value branch pruner (with a threshold of 0.5), the linear branch collapser pruner (with n = 0), and the zero-degree vertex pruner. Benjamini-Hochberg is used at the P-value corrcetion method.
+* **Plain Enrichment pruning strategy**: The pre-loop phase applies the high p-value branch pruner (with a threshold of 0.5), the linear branch collapser pruner (with n = 0), and the root children pruner (levels = 2). The loop-phase applies the high p-value branch pruner (with a threshold of 0.5), the linear branch collapser pruner (with n = 0), and the zero-degree vertex pruner. Benjamini-Hochberg is used as the P-value correction method.
 
 
-### The graph
+### The graph (more info to come)
 
 The colouring based on the significance of the p-value is dependant on the values in that actual session. So it is simply relative. To make the the colouring absolute, go to `website/templates/graph.html`, and change the following line:
 
@@ -119,6 +119,8 @@ Hovering over a node gives more displays more detailed information about it. Bot
 
 Nodes can be selected by clicking on them. Right-clicking on a node provides options such as 'Select first neighbors' and 'Select descendants'. 
 
+
+The graph will originally just show the most relevant branches. This imples that all nodes with p-value over 0.05 will be shown, including all nodes in the paths from these nodes up to the root. If all nodes have a higher p-value, the same will be done but for the nodes with p-value lower than 1.
 
 
 
