@@ -108,6 +108,8 @@ def count_removed_classes_for_class(class_iri, leaf_descendants_map, classificat
 
             print(f"Class {class_iri} has {len(leaves_role)} functional leaf descendants from roles.")
             print(f"Class {class_iri} has {len(all_roles)} roles.")
+        else:
+            print(f"⚠️ Class {class_iri} has no associated roles in class_to_all_roles_map.")
         
 
     n_leaves = len(leaves)

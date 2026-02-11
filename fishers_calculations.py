@@ -46,6 +46,19 @@ def calculate_p_value(n_ss_annotated, n_ss_leaves, n_bg_annotated, n_bg_leaves):
     # ‘greater’: thget_ne odds ratio of the underlying population is greater than one
     return odds, p
 
+def normalize_id(raw_id: str) -> str:
+    value = raw_id.strip().replace('"', "")
+    if value.startswith("http://") or value.startswith("https://"):
+        return value
+    # Convert CHEBI:ID to http://purl.obolibrary.org/obo/CHEBI_ID format
+    if value.startswith("CHEBI:"):
+        chebi_id = value.replace(":", "_")
+        return f"http://purl.obolibrary.org/obo/{chebi_id}"
+    if not value.startswith("http://"):
+        value = value.replace(":", "_")
+        return f"http://purl.obolibrary.org/obo/{value}"
+    return value
+
 def get_leaves(studyset_list, leaves_csv, class_to_leaf_map):
     studyset_leaves = set()
 
@@ -207,9 +220,8 @@ def run_enrichment_analysis(studyset_list,
     with open(roles_to_leaves_map_json, 'r') as f:
         roles_to_leaves_map = json.load(f)
 
-    # Currently the code is working with the whole chebi iri needed. Make sure the input study set is in the same format (fixed for the website)
-    if not studyset_list[0].startswith("http://purl.obolibrary.org/obo/"):
-        studyset_list = [f"http://purl.obolibrary.org/obo/{cls}" for cls in studyset_list]
+    # Normalize study set IDs to full IRIs
+    studyset_list = [normalize_id(cls) for cls in studyset_list]
 
     time_start_total = time.time()
     studyset_leaves = get_leaves(studyset_list, removed_leaves_csv, class_to_leaf_map)
@@ -379,8 +391,7 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
     with open(roles_to_leaves_map_json, 'r') as f:
         roles_to_leaves_map = json.load(f)
 
-    if not studyset_list[0].startswith("http://purl.obolibrary.org/obo/"):
-        studyset_list = [f"http://purl.obolibrary.org/obo/{cls}" for cls in studyset_list]
+    studyset_list = [normalize_id(cls) for cls in studyset_list]
 
     studyset_leaves = get_leaves(studyset_list, removed_leaves_csv, class_to_leaf_map)
     print(f"Study set leaves: {studyset_leaves}")

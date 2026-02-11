@@ -56,7 +56,7 @@
 
 <li class="nav-item">
     <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#pruningModal">
-        <i class="fa fa-sliders"></i> Pruning
+        <i class="fa fa-sliders"></i> Settings
     </a>
 </li>
 
@@ -135,7 +135,7 @@
                 }
             ],
             layout: {
-                name: 'breadthfirst',
+                name: 'cose',
                 directed: true,
                 padding: 10,
             }
@@ -440,10 +440,15 @@
                         break;
 
                     case 'hide-non-significant':
-                        // Hide nodes with p-value (corrected if available) above 0.05
+                        // Hide nodes with p-value (corrected if available) above 0.05 and p-value N/A nodes
                         cy.nodes().forEach(node => {
                             const p = node.data('p_value_corrected') ?? node.data('p_value');
                             if (p != null && p > 0.05) {
+                                node.style('display', 'none');
+                                // Also hide connected edges
+                                node.connectedEdges().style('display', 'none');
+                            }
+                            if (p == null) {
                                 node.style('display', 'none');
                                 // Also hide connected edges
                                 node.connectedEdges().style('display', 'none');
@@ -465,11 +470,38 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="pruningModalLabel">Change correction method and pruning</h5>
+                <h5 class="modal-title" id="pruningModalLabel">Change Target, Correction Method, and Pruning</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form action="/run_analysis" method="POST" id="pruningForm">
+                    <!-- CLASSIFICATION -->
+                    <div class="mb-3">
+                        <h6>Target of Enrichment:</h6>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="classification" id="classification_structural" value="structural" 
+                            {% if classification == 'structural' %} checked {% endif %} required>
+                            <label class="form-check-label" for="classification_structural">
+                                Structure
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="classification" id="classification_functional" value="functional"
+                            {% if classification == 'functional' %} checked {% endif %}>
+                            <label class="form-check-label" for="classification_functional">
+                                Role
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="classification" id="classification_full" value="full"
+                            {% if classification == 'full' %} checked {% endif %}>
+                            <label class="form-check-label" for="classification_full">
+                                Both
+                            </label>
+                        </div>
+                    </div>
+                    <hr class="my-3" style="opacity: 0.3;">
+
                     <!-- LOOPING PRUNING METHOD -->
                     <div class="mb-3">
                         <h6>Looping Pruning Method:</h6>

@@ -3,6 +3,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from flask import Flask, render_template, request, redirect, url_for, session, Response
 from fishers_calculations import run_enrichment_analysis, run_enrichment_analysis_plain_enrich_pruning_strategy
+from weighted_calculations import run_weighted_enrichment_analysis, run_weighted_enrichment_analysis_plain_enrich_pruning_strategy, auto_scale_weights
 from visualitations_and_pruning import graph_to_cytospace_json
 import re
 import csv
@@ -47,16 +48,44 @@ def parse_studyset(studyset: str):
     # Remove surrounding quotes if present
     studyset = studyset.strip()
 
-    # Split on commas OR newlines
-    items = re.split(r'[,|\n]', studyset)
+    studyset_list = []
+    weights_dict = {}
 
-    # Clean every item: remove quotes + spaces
-    cleaned = [x.strip().replace('"', "") for x in items if x.strip()]
+    if not studyset:
+        return studyset_list, weights_dict
 
-    # Convert colons to underscores
-    cleaned = [x.replace(":", "_") for x in cleaned]
+    def normalize_id(raw_id: str) -> str:
+        value = raw_id.strip().replace('"', "")
+        if value.startswith("http://") or value.startswith("https://"):
+            return value
+        if value.startswith("CHEBI:"):
+            return value.replace(":", "_")
+        return value.replace(":", "_")
 
-    return cleaned
+    # Split by lines first to support optional weights per line
+    for line in studyset.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        parts = [p for p in re.split(r'[\s,]+', line) if p]
+
+        if len(parts) >= 2:
+            try:
+                weight = float(parts[1])
+                class_id = normalize_id(parts[0])
+                studyset_list.append(class_id)
+                weights_dict[class_id] = weight
+                continue
+            except ValueError:
+                pass
+
+        # Fallback: treat all parts as IDs without weights
+        for part in parts:
+            class_id = normalize_id(part)
+            studyset_list.append(class_id)
+
+    return studyset_list, weights_dict
 
 def map_p_value_correction_method(method_name):
     if method_name == 'bonferroni':
@@ -80,14 +109,30 @@ def run_analysis():
     if not raw_studyset:
         return redirect(url_for('submission'))
     # Convert multi-line or comma-separated input into a list
-    studyset_list = parse_studyset(raw_studyset)
+    studyset_list, weights_dict = parse_studyset(raw_studyset)
+    
+    # Auto-scale weights if present (only scales up if max < 1000)
+    # if weights_dict:
+    #     weights_dict = auto_scale_weights(weights_dict, target_max=1000)
+    
+    session['weights_dict'] = weights_dict
 
+    # Get classification from form (allow changing it during re-run)
+    classification = request.form.get('classification')
+    if classification:
+        session['classification'] = classification
+    
     looping_prune_method = request.form.get('looping_prune_method')
     if looping_prune_method == 'no_loop_prune':
         # User chose no looping pruning, proceed to other pruning options
         pass
     elif looping_prune_method == 'plain_enrich':
-        results, pruned_G = run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
+        # Use weighted analysis if weights are present, otherwise use standard analysis
+        if weights_dict:
+            results, pruned_G = run_weighted_enrichment_analysis(weights_dict,
+                                                classification=session.get('classification'))
+        else:
+            results, pruned_G = run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
                                                 classification=session.get('classification'))
         # Save JSON representation of pruned_G in session for graph visualization
         graph_json_file = f'website/static/data/graph_{session["session_id"]}.json'
@@ -116,14 +161,28 @@ def run_analysis():
 
     zero_degree_prune = request.form.get('zero_degree_prune') == 'true'
     
-    results, pruned_G = run_enrichment_analysis(studyset_list,
-                                      bonferroni_correct=bonferroni_correct,
-                                      benjamini_hochberg_correct=benjamini_hochberg_correct,
-                                       root_children_prune=root_children_prune,levels=levels,
-                                       linear_branch_prune=linear_branch_prune, n=linear_branch_n,
-                                       high_p_value_prune=high_p_value_prune, p_value_threshold=p_value_threshold,
-                                       zero_degree_prune=zero_degree_prune,
-                                       classification=session.get('classification'))
+    # Use weighted analysis if weights are present, otherwise use standard analysis
+    if weights_dict:
+        results, pruned_G = run_weighted_enrichment_analysis(weights_dict,
+                                            levels=levels,
+                                            n=linear_branch_n,
+                                            p_value_threshold=p_value_threshold,
+                                            classification=session.get('classification'),
+                                            root_children_prune=root_children_prune,
+                                            linear_branch_prune=linear_branch_prune,
+                                            high_p_value_prune=high_p_value_prune,
+                                            zero_degree_prune=zero_degree_prune,
+                                            bonferroni_correct=bonferroni_correct,
+                                            benjamini_hochberg_correct=benjamini_hochberg_correct)
+    else:
+        results, pruned_G = run_enrichment_analysis(studyset_list,
+                                          bonferroni_correct=bonferroni_correct,
+                                          benjamini_hochberg_correct=benjamini_hochberg_correct,
+                                           root_children_prune=root_children_prune,levels=levels,
+                                           linear_branch_prune=linear_branch_prune, n=linear_branch_n,
+                                           high_p_value_prune=high_p_value_prune, p_value_threshold=p_value_threshold,
+                                           zero_degree_prune=zero_degree_prune,
+                                           classification=session.get('classification'))
                                        
     # Save JSON representation of pruned_G in session for graph visualization
     graph_json_file = f'website/static/data/graph_{session["session_id"]}.json'
@@ -154,10 +213,12 @@ def graph():
     graph_file = f'graph_{session_id}.json' if session_id else 'graph.json'
     pruning = session.get('pruning', {})
     correction_method = session.get('correction_method', {})
+    classification = session.get('classification', 'structural')
     return render_template('graph.html', 
                          graph_file=graph_file,
                          pruning=pruning, 
-                         correction_method=correction_method)
+                         correction_method=correction_method,
+                         classification=classification)
 
 
 

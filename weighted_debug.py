@@ -53,32 +53,45 @@ def calc_cgf_derivatives(lambda_val, weights_dict, N_tot):
         rho_t : float
             Normalization constant
     """
+    if len(weights_dict) == 0:
+        # Handle edge case of no weights
+        print("Warning: No weights provided in weights_dict.")
+        return 0.0, 1.0, 0.0, 1.0
     
     wmax = max(weights_dict.values())
-
+    
     n_with_weights = len(weights_dict)
     n_without_weights = N_tot - n_with_weights
     
-    rho_t = 0.0      # Denominator of K'(t)
-    d1_rho_t = 0.0   # Numerator of K'(t)
-    d2_rho_t = 0.0   # Numerator of K''(t)
+    rho_sum = 0.0      # Numerically stabilized sum
+    d1_sum = 0.0       # For ρ'(t)
+    d2_sum = 0.0       # For ρ''(t)
 
-    # Sum over elements with known weights (the study set)
+    # Sum over elements with known weights using wmax stabilization
+    # This prevents overflow: exp(t*(w-wmax)) is always <= 1 for w <= wmax
     for w in weights_dict.values():
         exp_term = np.exp(lambda_val * (w - wmax))
-        rho_t += exp_term
-        d1_rho_t += exp_term * w
-        d2_rho_t += exp_term * w * w
+        rho_sum += exp_term
+        d1_sum += exp_term * w
+        d2_sum += exp_term * w * w
 
     # Add contribution from elements without weights (background, weight = 0)
-
-    rho_t += n_without_weights * np.exp(lambda_val * (-wmax))
+    rho_sum += n_without_weights * np.exp(lambda_val * (-wmax))
     
-    # Calculate derivatives
-    d1k = d1_rho_t / rho_t
-    d2k = d2_rho_t / rho_t - d1k * d1k
+    # Convert stabilized sums back to actual ρ(t)
+    # True ρ(t) = (1/N_tot) * Σ exp(t*w)
+    # With stabilization: rho_sum = Σ exp(t*(w-wmax))
+    # So true ρ(t) = (1/N_tot) * exp(t*wmax) * rho_sum
+    # Therefore K(t) = ln(ρ(t)) = -ln(N_tot) + t*wmax + ln(rho_sum)
+    kt =  -np.log(N_tot) + lambda_val * wmax + np.log(rho_sum)
+    
+    # K'(t) = ρ'(t)/ρ(t)
+    d1k = d1_sum / rho_sum
+    
+    # K''(t) = ρ''(t)/ρ(t) - (K'(t))²
+    d2k = d2_sum / rho_sum - d1k * d1k
 
-    return d1k, d2k, rho_t
+    return d1k, d2k, kt, rho_sum
 
 
 def saddlepoint_equation(lambda_val, m, sum_weights, weights_dict, N_tot):
@@ -103,8 +116,8 @@ def saddlepoint_equation(lambda_val, m, sum_weights, weights_dict, N_tot):
     Returns:
         float : Value of equation (should be ~0 when λ is correct)
     """
-    d1k, _, _ = calc_cgf_derivatives(lambda_val, weights_dict, N_tot)
-    return m * d1k - sum_weights # S hat
+    d1k, _, _, _ = calc_cgf_derivatives(lambda_val, weights_dict, N_tot)
+    return m * d1k - sum_weights
 
 
 def saddlepoint_equation_derivative(lambda_val, m, weights_dict, N_tot):
@@ -125,7 +138,7 @@ def saddlepoint_equation_derivative(lambda_val, m, weights_dict, N_tot):
     Returns:
         float : Derivative value
     """
-    _, d2k, _ = calc_cgf_derivatives(lambda_val, weights_dict, N_tot)
+    _, d2k, _, _ = calc_cgf_derivatives(lambda_val, weights_dict, N_tot)
     return m * d2k
 
 
@@ -151,77 +164,51 @@ def find_lambda(m, sum_weights, weights_dict, N_tot):
         float : Optimal λ value
     """
     # Step 1: Bisection to find initial λ in range [0.00001, 5.0]
-    a = 0.00001
-    b = 5.0
     try:
         lambda_init = brentq(
             lambda l: saddlepoint_equation(l, m, sum_weights, weights_dict, N_tot),
-            a,
-            b,
-            maxiter=100,
-            xtol=0.05
+            0.00001,
+            5.0,
+            maxiter=100
         )
     except ValueError:
-        # Bisection failed - try expanding the interval
-        print(f"Warning: Bisection failed for m={m}, sum_weights={sum_weights}") # Most common warning
-        f_a = saddlepoint_equation(a, m, sum_weights, weights_dict, N_tot)
-        f_b = saddlepoint_equation(b, m, sum_weights, weights_dict, N_tot)
-        if f_a == f_b:
-            lambda_init = 0.0
-        else:
-            lambda_init = 0.0
-            for _ in range(5):
-                a = b
-                b = b + 10.0
-                try:
-                    lambda_init = brentq(
-                        lambda l: saddlepoint_equation(l, m, sum_weights, weights_dict, N_tot),
-                        a,
-                        b,
-                        maxiter=100,
-                        xtol=0.05
-                    )
-                    break
-                except ValueError:
-                    continue
+        # Bisection failed - equation may not have root in this range
+        print(f"Warning: Bisection failed for m={m}, sum_weights={sum_weights}")
+        lambda_init = 0.1  # Fallback initial guess
 
-    # Step 2: Newton-Raphson refinement for higher precision (only if needed)
-    f_init = saddlepoint_equation(lambda_init, m, sum_weights, weights_dict, N_tot)
-    if abs(f_init) < 1e-8:
-        lambda_optimal = lambda_init
-    else:
-        try:
-            lambda_optimal = newton(
-                func=lambda l: saddlepoint_equation(l, m, sum_weights, weights_dict, N_tot),
-                x0=lambda_init,
-                fprime=lambda l: saddlepoint_equation_derivative(l, m, weights_dict, N_tot),
-                tol=0.01,
-                maxiter=50
-            )
-        except RuntimeError:
-            # Newton failed to converge
-            print(f"Warning: Newton-Raphson failed to converge for m={m}, sum_weights={sum_weights}")
-            lambda_optimal = lambda_init  # Use bisection result
+    # Step 2: Newton-Raphson refinement for higher precision
+    try:
+        lambda_optimal = newton(
+            func=lambda l: saddlepoint_equation(l, m, sum_weights, weights_dict, N_tot),
+            x0=lambda_init,
+            fprime=lambda l: saddlepoint_equation_derivative(l, m, weights_dict, N_tot),
+            tol=0.01,
+            maxiter=50
+        )
+    except RuntimeError:
+        # Newton failed to converge
+        print(f"Warning: Newton-Raphson failed to converge for m={m}, sum_weights={sum_weights}")
+        lambda_optimal = lambda_init  # Use bisection result
 
     return lambda_optimal
 
 
-def lugannani_rice_pvalue(lambda_val, m, weights_dict, N_tot):
+def lugannani_rice_pvalue(lambda_val, m, sum_observed_weights, weights_dict, N_tot):
     """
     Calculate p-value using the Lugannani-Rice saddlepoint approximation.
     
-    This approximates the tail probability P(Sum ≥ observed_sum) for a sum
-    of random variables. It's more accurate than normal approximation.
+    This implements Equation 4 from the SaddleSum article:
+    z = sign(t̂) × √(2[t̂Ŝ - mK(t̂)])
+    C = t̂√(mK''(t̂))
+    P-value ≈ Φ(z) + φ(z)[1/C - 1/z]
     
-    The formula combines:
-    1. Normal approximation (ndtr)
-    2. Two correction terms for skewness and kurtosis
-
     Parameters:
         lambda_val : float
-            The saddlepoint parameter (solution to saddlepoint equation)
+            The saddlepoint parameter t̂ (solution to saddlepoint equation)
         m : int
-            Number of observed study-set elements in the category
+            Number of elements sampled (observed study-set count in category)
+        sum_observed_weights : float
+            Observed sum Ŝ of weights for elements in the category
         weights_dict : dict
             {element_id: weight} for elements with known weights
         N_tot : int
@@ -230,74 +217,57 @@ def lugannani_rice_pvalue(lambda_val, m, weights_dict, N_tot):
     Returns:
         float : P-value (probability in [0, 1])
     """
-    # Get CGF derivatives at the saddlepoint
-    d1k, d2k, rho_t = calc_cgf_derivatives(lambda_val, weights_dict, N_tot)
-    
-    if len(weights_dict) == 0:
+    if len(weights_dict) == 0 or m == 0:
         return 1.0
     
-    wmax = max(weights_dict.values())
-
-    ## Calculate components for Lugannani-Rice formula
-
-    # exp_h: Related to the probability mass function at the saddlepoint
-    exp_h = rho_t * np.exp(lambda_val * (wmax - d1k)) / N_tot
-
-    # C: Related to the curvature of the log probability at the saddlepoint
-    C = 2 * lambda_val * np.sqrt(d2k)
-
-    # D: Standardized distance from the mean to the observed sum
-    D_argument = lambda_val * (d1k - wmax) - np.log(rho_t) + np.log(N_tot)
+    # Get CGF K(t̂), K'(t̂), K''(t̂) at the saddlepoint
+    d1k, d2k, kt, rho_t = calc_cgf_derivatives(lambda_val, weights_dict, N_tot)
     
-    if D_argument < 0:
-        print(f"Warning: D_argument is negative ({D_argument}), setting p-value to 1.0")
-        return 1.0  # Invalid configuration, return non-significant
-
-    D = -np.sqrt(2) * np.sqrt(D_argument)
-
-    # phi: Correction factor based on saddlepoint density
-    phi = np.sqrt(2 / np.pi) * (exp_h ** m)
-
-    # z: Standardized test statistic for normal CDF
-    z = (D * np.sqrt(m)) / np.sqrt(2)
-
-    # Calculate p-value only if D * sqrt(m) <= -1 to ensure we're in the enrichment tail
-    if D * np.sqrt(m) <= -1:
-        # Normal CDF using error function
-        # erf(z) = 2/√π * integral from 0 to z of exp(-t²) dt. 
-        # Standard normal CDF = (1 + erf(z/√2)) / 2
-        ndtr = (1 + erf(z)) / 2 # Normal Distribution (cumulative) Tail Right
-        
-        # Lugannani-Rice correction terms
-        # These adjust for skewness and kurtosis of the distribution
-        correction1 = phi / C / np.sqrt(m)
-        correction2 = phi / D / np.sqrt(m) / 2
-        
-        # Final p-valuendtr = Normal Distribution 
-        p_value = ndtr + correction1 + correction2
-        
-        # Handle numerical issues
-        if np.isnan(p_value) or np.isinf(p_value):
-            print(f"Warning: p-value computation resulted in NaN or Inf, setting to 1.0")
-            p_value = 1.0
+    # Calculate z according to Equation 4: z = sign(t̂) × √(2[t̂Ŝ - mK(t̂)])
+    z_squared_arg = lambda_val * sum_observed_weights - m * kt
+    
+    if z_squared_arg < 0:
+        # This means we're not in the enrichment tail (observed sum too small)
+        return 1.0
+    
+    z = np.sign(lambda_val) * np.sqrt(2 * z_squared_arg)
+    
+    # Calculate C according to Equation 4: C = t̂√(mK''(t̂))
+    if d2k <= 0:
+        # Invalid variance, return non-significant
+        return 1.0
+    
+    C = lambda_val * np.sqrt(m * d2k)
+    
+    if abs(C) < 1e-10:  # Avoid division by very small numbers
+        return 1.0
+    
+    # Calculate Φ(z) - upper tail of standard normal
+    # For enrichment (upper tail), we want P(Z ≥ z)
+    # Standard normal CDF: Φ(z) = (1 + erf(z/√2))/2
+    # Upper tail: 1 - Φ(z) = (1 - erf(z/√2))/2
+    phi_z_upper = (1 - erf(z / np.sqrt(2))) / 2
+    
+    # Calculate φ(z) - standard normal PDF
+    # φ(z) = (1/√(2π)) exp(-z²/2)
+    phi_density = np.exp(-z*z / 2) / np.sqrt(2 * np.pi)
+    
+    # Calculate correction term: φ(z)[1/C - 1/z]
+    if abs(z) < 1e-10:  # Near zero z, use approximation or return simple result
+        correction = 0
     else:
-        # Not in the enrichment tail (D * sqrt(m) > -1)
-        print(f"D * sqrt(m) > -1 ({D * np.sqrt(m)}), setting p-value to 1.0")
-        p_value = 1.0
+        correction = phi_density * (1/C - 1/z)
     
-    # # Clamp into valid probability range
-    # if p_value < 0.0:
-    #     p_value = 0.0
-    # elif p_value > 1.0:
-    #     p_value = 1.0
-
-    print(f"\n--- Lugannani-Rice Debug ---")
-    print(f"D: {D}")
-    print(f"C: {C}")
-    print(f"lambda*T - K: {lambda_val * (d1k - wmax) - np.log(rho_t) + np.log(N_tot)}")
-
-    print("-----------------------------\n")
-
+    # Final p-value according to Equation 4
+    p_value = phi_z_upper + correction
+    
+    # Handle numerical issues
+    if np.isnan(p_value) or np.isinf(p_value):
+        return 1.0
+    
+    # Clamp to valid probability range [0, 1]
+    p_value = max(0.0, min(1.0, p_value))
+    
     return p_value
 
 
@@ -368,30 +338,15 @@ def calculate_weighted_pvalue(studyset_leaves, class_to_check, class_to_leaf_map
     except Exception as e:
         print(f"Error finding lambda for {class_to_check}: {e}")
         return None
-
-    # Debug diagnostics
-    if sum_observed_weights > 0:
-        d1k0, _, _ = calc_cgf_derivatives(0.0, weights_dict, N_total)
-        expected_sum = m * d1k0
-
-        print("\n--- DEBUG ---")
-        print(f"class: {class_to_check}")
-        print(f"m (category size): {m}")
-        print(f"n_observed: {n_observed}")
-        print(f"sum_observed_weights: {sum_observed_weights}")
-        print(f"population mean weight (K'(0)): {d1k0}")
-        print(f"expected_sum under null: {expected_sum}")
-        print(f"lambda_optimal: {lambda_optimal}")
-        print("----------------")
-        
+    
     # Calculate p-value using Lugannani-Rice formula
     # Use observed study-set count (n_observed) like the Java implementation
     try:
-        p_value = lugannani_rice_pvalue(lambda_optimal, n_observed, weights_dict, N_total)
+        p_value = lugannani_rice_pvalue(lambda_optimal, n_observed, sum_observed_weights, weights_dict, N_total)
     except Exception as e:
         print(f"Error calculating p-value for {class_to_check}: {e}")
         return None
-        
+    
     return p_value
 
 def get_enrichment_values_with_weights(removed_leaves_csv, classification, 

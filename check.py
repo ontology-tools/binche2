@@ -123,6 +123,17 @@ def find_direct_roles_for_any_class(class_iri):
         print(f" - {role}")
     return roles
 
+def find_all_roles_for_any_class(class_iri):
+    roles_json = 'data/class_to_all_roles_map.json'
+    with open(roles_json, 'r') as f:
+        roles_map = json.load(f)
+    # Check if class exists in map
+    if class_iri not in roles_map:
+        print(f"Class {class_iri} not found in all roles map.")
+        return []
+    roles = roles_map.get(class_iri, [])
+    print(f"Class {class_iri} has {len(roles)} associated direct and inherited roles:")
+    return roles
 
 if __name__ == "__main__":
 
@@ -141,7 +152,7 @@ if __name__ == "__main__":
 
     #  find_direct_roles_for_any_class(class_iri)
 
-    class_iri = "http://purl.obolibrary.org/obo/CHEBI_25676"
+    class_iri = "http://purl.obolibrary.org/obo/CHEBI_25899"
 
     leaf_descendants_map_file = "data/class_to_leaf_descendants_map.json"
     with open(leaf_descendants_map_file, 'r') as f:
@@ -155,4 +166,6 @@ if __name__ == "__main__":
     with open(roles_to_leaves_map_json, "r") as f:
         roles_to_leaves_map = json.load(f)
 
-    count_removed_classes_for_class(class_iri, leaf_descendants_map, classification, class_to_all_roles_map, roles_to_leaves_map)
+    # count_removed_classes_for_class(class_iri, leaf_descendants_map, classification, class_to_all_roles_map, roles_to_leaves_map)
+
+    find_all_roles_for_any_class(class_iri)
