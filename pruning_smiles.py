@@ -701,17 +701,18 @@ if __name__ == "__main__":
         print("Running code to build parent map excluding deprecated classes...")
         ontology = load_chebi()
         output_json = "data/chebi_parent_map.json" 
-        shortened_output_json = "data/chebi_parent_map_shortened_id.json"
+        # shortened_output_json = "data/chebi_parent_map_shortened_id.json"
         if os.path.exists(output_json):
             print(f"Output file {output_json} already exists. Are you sure you want to overwrite it? If so, please remove it before running this script.")
         else:
             build_parent_map(ontology, output_json, deprecated_property) # Depracated classes are removed inside the function
 
-        if os.path.exists(shortened_output_json):
-            print(f"Shortened output file {shortened_output_json} already exists. Are you sure you want to overwrite it? If so, please remove it before running this script.")
-        else:
-            shorten_parent_map(output_json, shortened_output_json)
-            print(f"Saved shortened parent map to {shortened_output_json}")
+        # shortened_output_json = "data/chebi_parent_map_shortened_id.json"
+        # if os.path.exists(shortened_output_json):
+        #     print(f"Shortened output file {shortened_output_json} already exists. Are you sure you want to overwrite it? If so, please remove it before running this script.")
+        # else:
+        #     shorten_parent_map(output_json, shortened_output_json)
+        #     print(f"Saved shortened parent map to {shortened_output_json}")
         
     
     elif task == "map_names_to_classes":

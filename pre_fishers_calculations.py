@@ -198,8 +198,6 @@ if __name__ == "__main__":
 
         print(f" The probability of success value for class {class_iri} is: {prob_of_success:.4g} ({n_subclasses} / {n_tot_removed_leaves})")
 
-        # TODO?: Could check that the input class actually has the expected classification by checking which filtered entology it is found in
-
 
 
     else:

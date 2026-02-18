@@ -13,7 +13,7 @@
 
 <body>
 
-    <nav class="navbar navbar-expand-lg navbar-dark ps-3 mb-4">
+    <nav class="navbar navbar-expand-lg navbar-dark ps-3 mb-2">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">BiNChE2</a>
 
@@ -34,6 +34,21 @@
 
 
         {% block body %}{% endblock %}
+
+    <footer style="background-color: #f8f9fa; padding: 30px 40px; margin-top: 20px; border-top: 1px solid #dee2e6;">
+        <div style="max-width: 1200px;">
+            <p style="margin: 0; font-size: 0.95rem; line-height: 1.6;">
+                This tool is developed by the <a href="https://hastingslab.org/" style="color: #0f808d; text-decoration: none;">Human-Centered Health AI group</a> 
+                at the Idiap Research Institute in Martigny, Switzerland and is a re-implementation and continuation of 
+                <a href="https://github.com/pcm32/BiNCheWeb/wiki/BiNChE" style="color: #0f808d; text-decoration: none;">BiNChE</a>.
+            </p>
+            <p style="margin: 10px 0 0 0; font-size: 0.95rem;">
+                The code is available on <a href="https://github.com/ontology-tools/binche2" style="color: #0f808d; text-decoration: none;">GitHub</a>. 
+                Please report any issues or feedback you encounter <a href="https://github.com/ontology-tools/binche2/issues" style="color: #0f808d; text-decoration: none;">here</a>, 
+                and we will look into it as soon as possible.
+            </p>
+        </div>
+    </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
         integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"

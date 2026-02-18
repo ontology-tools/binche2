@@ -263,7 +263,6 @@ button
 
 .main-container {
 
-  margin: 20px 40px;
   display: grid;
   gap: 40px;
   grid-template-columns: 1fr;
