@@ -6,21 +6,22 @@
 
 {% block body %}
 <div style="padding: 20px 40px;">
-    <h3 class="mt-2 mb-3">Submission</h3>
-
+    <h3 class="mt-2 mb-3">Submission Page</h3>
+    
     <div class="main-container">
     <form action="/submission" method="POST" class="main-form">
 
+        <p>Welcome to the BiNChE2!</p>
+        <p>Here, you can submit your study set for enrichment analysis based on the ChEBI ontology. </p>
         <h4 class="mb-4">Input Study Set:</h4>
 
-        <p>You can insert your study set below.</p>
-        <p>Example submission:</p>
+        <p>Example submission format:</p>
         <pre>
 CHEBI:77030
 CHEBI:79036
         </pre>
 
-        <p>Example submission with weights (tab or space-separated):</p>
+        <p>Example submission format with weights (tab or space-separated):</p>
         <pre>
 CHEBI:17079	0.7665
 CHEBI:46816	0.7465

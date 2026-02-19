@@ -15,7 +15,7 @@
 
     <nav class="navbar navbar-expand-lg navbar-dark ps-3 mb-2">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#">BiNChE2</a>
+            <a class="navbar-brand" href="{{ url_for('index') }}">BiNChE2</a>
 
             <div class="collapse navbar-collapse">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
@@ -26,6 +26,9 @@
                     </li>
                     {% block nav_items %}{% endblock %}
                 </ul>
+                <a href="https://github.com/ontology-tools/binche2/issues" target="_blank" class="nav-link">
+                    <i class="fa fa-bug"></i> Report an Issue
+                </a>
             </div>
         </div>
 
@@ -43,7 +46,7 @@
                 <a href="https://github.com/pcm32/BiNCheWeb/wiki/BiNChE" style="color: #0f808d; text-decoration: none;">BiNChE</a>.
             </p>
             <p style="margin: 10px 0 0 0; font-size: 0.95rem;">
-                The code is available on <a href="https://github.com/ontology-tools/binche2" style="color: #0f808d; text-decoration: none;">GitHub</a>. 
+                The code, together with more detailed descriptions, is available on <a href="https://github.com/ontology-tools/binche2" style="color: #0f808d; text-decoration: none;">GitHub</a>. 
                 Please report any issues or feedback you encounter <a href="https://github.com/ontology-tools/binche2/issues" style="color: #0f808d; text-decoration: none;">here</a>, 
                 and we will look into it as soon as possible.
             </p>
