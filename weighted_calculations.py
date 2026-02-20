@@ -1,8 +1,8 @@
 import numpy as np
 from scipy.special import erf
 from scipy.optimize import brentq, newton
-from fishers_calculations import get_n_ss_annotated
-from pre_fishers_calculations import count_removed_classes_for_class
+from fishers_calculations import get_n_ss_annotated, get_n_ss_annotated_for_roles
+from pre_fishers_calculations import count_removed_classes_for_class, count_removed_classes_for_roles
 from math import inf
 import json
 from fishers_calculations import get_leaves, get_ancestors_for_inputs, count_removed_leaves, print_enrichment_results
@@ -304,7 +304,7 @@ def lugannani_rice_pvalue(lambda_val, m, weights_dict, N_tot):
 
 def calculate_weighted_pvalue(studyset_leaves, class_to_check, class_to_leaf_map,
                               weights_dict, N_total, classification,
-                              class_to_all_roles_map, roles_to_leaves_map):
+                              class_to_all_roles_map, roles_to_leaves_map, role_class=False):
     """
     Main function to calculate weighted enrichment p-value for a single category.
     
@@ -332,19 +332,16 @@ def calculate_weighted_pvalue(studyset_leaves, class_to_check, class_to_leaf_map
     # Get all leaf descendants of this category based on classification
     leaves = set()
     
-    if classification in ["structural", "full"]:
-        leaf_descendants_structural = set(class_to_leaf_map.get(class_to_check, []))
-        leaves.update(leaf_descendants_structural)
-    
-    if classification in ["functional", "full"]:
-        # Get all roles (direct + inherited from ancestors + role descendants)
-        all_roles = class_to_all_roles_map.get(class_to_check, [])
-        for role in all_roles:
-            leaves.update(roles_to_leaves_map.get(role, []))
-    
-    leaf_descendants = leaves
+    if role_class == False:
+        leaves.update(class_to_leaf_map.get(class_to_check, []))
+      
+    if role_class == True:
+        leaves.update(roles_to_leaves_map.get(class_to_check, []))
+
+    leaf_descendants = set(leaves)
     
     if len(leaf_descendants) == 0:
+        print(f"⚠️ No leaf descendants found for {class_to_check} in classification {classification}. Setting p-value to 1.0.")
         return None  # No descendants, no enrichment
     
     # Find overlap: elements in both study set AND this category
@@ -358,7 +355,8 @@ def calculate_weighted_pvalue(studyset_leaves, class_to_check, class_to_leaf_map
     n_observed = len(overlap)
     
     if n_observed == 0:
-        return   # No overlap, no enrichment. Shouldn't happen due to earlier check.
+        print(f"No overlap for class {class_to_check}")
+        return None  # No overlap, no enrichment.
     
     # Calculate sum of weights for the overlap
     sum_observed_weights = sum(weights_dict.get(element_id, 0.0) for element_id in overlap)
@@ -398,7 +396,8 @@ def calculate_weighted_pvalue(studyset_leaves, class_to_check, class_to_leaf_map
 def get_enrichment_values_with_weights(removed_leaves_csv, classification, 
                                        studyset_leaves, studyset_ancestors, 
                                        class_to_leaf_map, weights_dict,
-                                       class_to_all_roles_map, roles_to_leaves_map):
+                                       class_to_all_roles_map, roles_to_leaves_map,
+                                       studyset_ancestors_roles):
     """
     Calculate weighted p-values for all categories.
     Optionally applies multiple-testing correction using weighted p-values.
@@ -410,58 +409,113 @@ def get_enrichment_values_with_weights(removed_leaves_csv, classification,
     n_bg_leaves = count_removed_leaves(removed_leaves_csv)
     n_ss_leaves = len(studyset_leaves)
 
-    
-    for class_iri in studyset_ancestors:
-        # Calculate counts
-        n_ss_annotated = get_n_ss_annotated( # Just used for reporting, not for p-value calculation
-            studyset_leaves,
-            class_iri,
-            class_to_leaf_map,
-            classification,
-            class_to_all_roles_map,
-            roles_to_leaves_map,
-        )
-        
-        _, n_bg_annotated = count_removed_classes_for_class( # Just used for reporting, not for p-value calculation
-            class_iri,
-            class_to_leaf_map,
-            classification,
-            class_to_all_roles_map,
-            roles_to_leaves_map,
-        )
-        
-        # Weighted test
-        p_weighted = calculate_weighted_pvalue(
-            studyset_leaves, class_iri, class_to_leaf_map,
-            weights_dict, n_bg_leaves, classification,
-            class_to_all_roles_map, roles_to_leaves_map
-        )
-        
-        if p_weighted is None:
-            print(f"Warning: p_weighted is None for {id_to_name(class_iri)}, skipping")
-            continue
-        
-        # Calculate sum of weights in overlap for reporting
-        # Use same logic as calculate_weighted_pvalue to get leaves
-        leaves_for_sum = set()
-        if classification in ["structural", "full"]:
+    if classification in ["structural", "full"]:
+
+        role_class = False
+
+        for class_iri in studyset_ancestors:
+            # Calculate counts
+            n_ss_annotated = get_n_ss_annotated( # Just used for reporting, not for p-value calculation
+                studyset_leaves,
+                class_iri,
+                class_to_leaf_map,
+                classification,
+                class_to_all_roles_map,
+                roles_to_leaves_map,
+            )
+            
+            _, n_bg_annotated = count_removed_classes_for_class( # Just used for reporting, not for p-value calculation
+                class_iri,
+                class_to_leaf_map,
+                classification,
+                class_to_all_roles_map,
+                roles_to_leaves_map,
+            )
+            
+            # Weighted test
+            p_weighted = calculate_weighted_pvalue(
+                studyset_leaves, class_iri, class_to_leaf_map,
+                weights_dict, n_bg_leaves, classification,
+                class_to_all_roles_map, roles_to_leaves_map,
+                role_class
+            )
+            
+            if p_weighted is None:
+                print(f"Warning: p_weighted is None for {id_to_name(class_iri)}, skipping")
+                continue
+            
+            # Calculate sum of weights in overlap for reporting
+            # Use same logic as calculate_weighted_pvalue to get leaves
+            leaves_for_sum = set()
+            # if classification in ["structural", "full"]:
             leaves_for_sum.update(class_to_leaf_map.get(class_iri, []))
-        if classification in ["functional", "full"]:
-            all_roles = class_to_all_roles_map.get(class_iri, [])
-            for role in all_roles:
-                leaves_for_sum.update(roles_to_leaves_map.get(role, []))
-        
-        overlap = set(studyset_leaves) & leaves_for_sum
-        sum_weights = sum(weights_dict.get(leaf_id, 0.0) for leaf_id in overlap)
-        
-        enrichment_results[class_iri] = {
-            'n_ss_annotated': n_ss_annotated,
-            'n_ss_leaves': n_ss_leaves,
-            'n_bg_annotated': n_bg_annotated,
-            'n_bg_leaves': n_bg_leaves,
-            'p_value_weighted': p_weighted,
-            'sum_weights': sum_weights
-        }
+            # if classification in ["functional", "full"]:
+            #     all_roles = class_to_all_roles_map.get(class_iri, [])
+            #     for role in all_roles:
+            #         leaves_for_sum.update(roles_to_leaves_map.get(role, []))
+            
+            overlap = set(studyset_leaves) & leaves_for_sum
+            sum_weights = sum(weights_dict.get(leaf_id, 0.0) for leaf_id in overlap)
+            
+            enrichment_results[class_iri] = {
+                'n_ss_annotated': n_ss_annotated,
+                'n_ss_leaves': n_ss_leaves,
+                'n_bg_annotated': n_bg_annotated,
+                'n_bg_leaves': n_bg_leaves,
+                'p_value_weighted': p_weighted,
+                'sum_weights': sum_weights
+            }
+
+    if classification in ["functional", "full"]:
+
+        role_class = True
+
+        for role in studyset_ancestors_roles:
+            # Calculate counts
+            n_ss_annotated = get_n_ss_annotated_for_roles( # Just used for reporting, not for p-value calculation
+                studyset_leaves,
+                role,
+                class_to_all_roles_map,
+                roles_to_leaves_map,
+            )
+            
+            _, n_bg_annotated = count_removed_classes_for_roles( # Just used for reporting, not for p-value calculation
+                role,
+                class_to_leaf_map,
+                classification,
+                roles_to_leaves_map,
+            )
+            
+            # Weighted test
+            p_weighted = calculate_weighted_pvalue(
+                studyset_leaves, role, class_to_leaf_map,
+                weights_dict, n_bg_leaves, classification,
+                class_to_all_roles_map, roles_to_leaves_map,
+                role_class
+            )
+            
+            if p_weighted is None:
+                print(f"Warning: p_weighted is None for {id_to_name(role)}, skipping")
+                continue
+            
+            # if classification in ["functional", "full"]:
+            # all_roles = class_to_all_roles_map.get(class_iri, [])
+            leaves_for_sum = set()
+            
+            leaves_for_sum.update(roles_to_leaves_map.get(role, []))
+            
+            overlap = set(studyset_leaves) & leaves_for_sum
+            sum_weights = sum(weights_dict.get(leaf_id, 0.0) for leaf_id in overlap)
+            
+            enrichment_results[role] = {
+                'n_ss_annotated': n_ss_annotated,
+                'n_ss_leaves': n_ss_leaves,
+                'n_bg_annotated': n_bg_annotated,
+                'n_bg_leaves': n_bg_leaves,
+                'p_value_weighted': p_weighted,
+                'sum_weights': sum_weights
+            }
+
     return enrichment_results
 
 
@@ -500,6 +554,37 @@ def run_weighted_enrichment_analysis_plain_enrich_pruning_strategy(weights_dict,
     print(f"Study set ancestors: {studyset_ancestors}")
     print(f"Number of study set ancestors: {len(studyset_ancestors)}")
 
+    # Build studyset_ancestors_roles for functional/full classification
+    if classification in ["functional", "full"]:
+        # Collect roles associated with structural ancestors AND leaves
+        studyset_ancestors_roles = set()
+        
+        # Add roles from leaves
+        for leaf in studyset_leaves:
+            studyset_ancestors_roles.update(class_to_all_roles_map.get(leaf, []))
+        
+        # Add roles from structural ancestors
+        for class_to_check in studyset_ancestors:
+            studyset_ancestors_roles.update(class_to_all_roles_map.get(class_to_check, []))
+        
+        # Also include all ancestors of these roles (they will appear in the graph)
+        with open(parent_map_file, 'r') as f:
+            parent_map = json.load(f)
+        
+        roles_with_ancestors = set(studyset_ancestors_roles)
+        to_process = list(studyset_ancestors_roles)
+        
+        while to_process:
+            role = to_process.pop(0)
+            for parent in parent_map.get(role, []):
+                if parent not in roles_with_ancestors:
+                    roles_with_ancestors.add(parent)
+                    to_process.append(parent)
+        
+        studyset_ancestors_roles = roles_with_ancestors
+        print(f"Number of roles (including all ancestors): {len(studyset_ancestors_roles)}")
+    else:
+        studyset_ancestors_roles = set()
 
     all_removed_nodes = set()
 
@@ -512,6 +597,7 @@ def run_weighted_enrichment_analysis_plain_enrich_pruning_strategy(weights_dict,
         weights_dict,
         class_to_all_roles_map,
         roles_to_leaves_map,
+        studyset_ancestors_roles
     )
 
     for cls, vals in enrichment_results.items():
@@ -525,7 +611,10 @@ def run_weighted_enrichment_analysis_plain_enrich_pruning_strategy(weights_dict,
     print("Enrichment results after Benjamini-Hochberg correction:")
     print_enrichment_results(enrichment_results)
 
-    pre_pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, max_n_leaf_classes=inf)
+    # Create graph with roles and structures based on classification
+    pre_pruned_G = create_graph_with_roles_and_structures(studyset_leaves, studyset_ancestors, 
+                            studyset_ancestors_roles, parent_map_file, 
+                            class_to_all_roles_map, classification)
     G = pre_pruned_G.copy()
 
     ## Pre-loop phase ##
@@ -644,7 +733,41 @@ def run_weighted_enrichment_analysis(weights_dict,
     print(f"Study set ancestors: {studyset_ancestors_all}")
     print(f"Number of study set ancestors: {len(studyset_ancestors_all)}")
 
-    G = create_graph_from_map(studyset_leaves, parent_map_file, max_n_leaf_classes=inf)
+    if classification in ["functional", "full"]:
+        # Collect roles associated with structural ancestors AND leaves
+        studyset_ancestors_roles = set()
+        
+        # Add roles from leaves
+        for leaf in studyset_leaves:
+            studyset_ancestors_roles.update(class_to_all_roles_map.get(leaf, []))
+        
+        # Add roles from structural ancestors
+        for class_to_check in studyset_ancestors_all:
+            studyset_ancestors_roles.update(class_to_all_roles_map.get(class_to_check, []))
+        
+        # Also include all ancestors of these roles (they will appear in the graph)
+        with open(parent_map_file, 'r') as f:
+            parent_map = json.load(f)
+        
+        roles_with_ancestors = set(studyset_ancestors_roles)
+        to_process = list(studyset_ancestors_roles)
+        
+        while to_process:
+            role = to_process.pop(0)
+            for parent in parent_map.get(role, []):
+                if parent not in roles_with_ancestors:
+                    roles_with_ancestors.add(parent)
+                    to_process.append(parent)
+        
+        studyset_ancestors_roles = roles_with_ancestors
+        print(f"Number of roles (including ancestors): {len(studyset_ancestors_roles)}")
+    else:
+        studyset_ancestors_roles = set()
+
+    # Create graph with roles and structures based on classification
+    G = create_graph_with_roles_and_structures(studyset_leaves, studyset_ancestors_all, 
+                            studyset_ancestors_roles, parent_map_file, 
+                            class_to_all_roles_map, classification)
     pruned_G = G.copy()
 
     all_removed_nodes = set()
@@ -678,6 +801,7 @@ def run_weighted_enrichment_analysis(weights_dict,
         weights_dict,
         class_to_all_roles_map,
         roles_to_leaves_map,
+        studyset_ancestors_roles
     )
 
     for cls, vals in enrichment_results.items():
@@ -726,11 +850,6 @@ def run_weighted_enrichment_analysis(weights_dict,
         "enrichment_results": {id_to_name(cls): vals for cls, vals in enrichment_results.items()}
     }
     return results, pruned_G
-
-# TODO: Adjust so input wth weights works as intended. Maybe a change in website files?
-# TODO: Make sure it functions as intended with weights input.
-# TODO: Add function to website
-# TODO: Check so that it works for all classifications
 
 
 # Autoscaling weights to see if makes p-values more significant. Maybe not sensible but worth a try.
@@ -812,7 +931,8 @@ if __name__ == "__main__":
         removed_leaves_csv, classification,
         studyset_leaves, studyset_ancestors,
         class_to_leaf_map, weights_dict,
-        class_to_all_roles_map, roles_to_leaves_map
+        class_to_all_roles_map, roles_to_leaves_map,
+        set()  # Empty roles set for this simple test
     )
     
     print(f"\nFound {len(enrichment_results)} enriched classes:")
