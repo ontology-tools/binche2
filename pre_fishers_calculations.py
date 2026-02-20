@@ -73,9 +73,9 @@ def count_removed_classes_for_class(class_iri, leaf_descendants_map, classificat
         n_leaves: Count of leaves
     """
 
-    if classification not in ["structural", "functional", "full"]:
-        print("Classification must be either 'structural', 'functional' or 'full'.")
-        return 0, 0
+    # if classification not in ["structural", "functional", "full"]:
+        # print("Classification must be either 'structural', 'functional' or 'full'.")
+        # return 0, 0
 
     leaves = set()
 
@@ -91,31 +91,51 @@ def count_removed_classes_for_class(class_iri, leaf_descendants_map, classificat
         # Get string of sublclasses from the map
         leaves_structure = leaf_descendants_map[str(class_iri)]
         leaves.update(leaves_structure)
+    
+    else:
+        print(f"Classification {classification} is not supported for counting classes.")
+        return 0, 0
 
-    if classification in ["functional", "full"]:
-        # Get ALL roles for the class being tested (direct + inherited from ancestors)
-        all_roles = class_to_all_roles_map.get(class_iri, [])
+    # if classification in ["functional", "full"]:
+    #     # Get ALL roles for the class being tested (direct + inherited from ancestors)
+    #     all_roles = class_to_all_roles_map.get(class_iri, [])
 
-        if all_roles:
-            # Collect all leaves associated with those roles
-            leaves_role = set()
-            for role in all_roles:
-                leaves_role.update(roles_to_leaves_map.get(role, []))
-                if role not in roles_to_leaves_map:
-                    print(f"⚠️ Role {role} has no associated leaves in roles_to_leaves_map.")
-                print(f"Role {role} has {len(roles_to_leaves_map.get(role, []))} associated leaves.")
-            leaves.update(leaves_role)
+    #     if all_roles:
+    #         # Collect all leaves associated with those roles
+    #         leaves_role = set()
+    #         for role in all_roles:
+    #             leaves_role.update(roles_to_leaves_map.get(role, []))
+    #             if role not in roles_to_leaves_map:
+    #                 print(f"⚠️ Role {role} has no associated leaves in roles_to_leaves_map.")
+    #             print(f"Role {role} has {len(roles_to_leaves_map.get(role, []))} associated leaves.")
+    #         leaves.update(leaves_role)
 
-            print(f"Class {class_iri} has {len(leaves_role)} functional leaf descendants from roles.")
-            print(f"Class {class_iri} has {len(all_roles)} roles.")
-        else:
-            print(f"⚠️ Class {class_iri} has no associated roles in class_to_all_roles_map.")
+    #         print(f"Class {class_iri} has {len(leaves_role)} functional leaf descendants from roles.")
+    #         print(f"Class {class_iri} has {len(all_roles)} roles.")
+    #     else:
+    #         print(f"⚠️ Class {class_iri} has no associated roles in class_to_all_roles_map.")
         
 
     n_leaves = len(leaves)
 
     return leaves, n_leaves
+
+def count_removed_classes_for_roles(class_iri, leaf_descendants_map, classification, roles_to_leaves_map):
     
+    if classification not in ["functional", "full"]:
+        print(f"Classification {classification} is not supported for counting roles.")
+        return 0, 0
+
+    leaves = set()
+    leaves.update(roles_to_leaves_map.get(class_iri, []))
+
+    if not leaves:
+        print(f"⚠️ Role {class_iri} has no associated leaves in roles_to_leaves_map.")
+
+    n_leaves = len(leaves)
+
+    return leaves, n_leaves
+
 if __name__ == "__main__":
 
     """ Select task to perform. To calculate the removed leaf classes for a given class, 

@@ -4,8 +4,8 @@ import pandas as pd
 import json
 import copy 
 import math
-from visualitations_and_pruning import root_children_pruner, linear_branch_collapser_pruner_remove_less, high_p_value_branch_pruner, zero_degree_pruner, create_graph_from_map, id_to_name
-from pre_fishers_calculations import count_removed_classes_for_class, count_removed_leaves
+from visualitations_and_pruning import root_children_pruner, linear_branch_collapser_pruner_remove_less, high_p_value_branch_pruner, zero_degree_pruner, create_graph_from_map, id_to_name, create_graph_with_roles_and_structures
+from pre_fishers_calculations import count_removed_classes_for_class, count_removed_leaves, count_removed_classes_for_roles
 from multiple_test_corrections import bonferroni_correction, benjamini_hochberg_fdr_correction
 import time
 
@@ -100,10 +100,6 @@ def get_n_ss_annotated(studyset_leaves, class_to_check, class_to_leaf_map, class
     map_file: JSON file mapping each class to all its leaf descendants
     """
 
-    if classification not in ["structural", "functional", "full"]:
-        print("Classification must be either 'structural', 'functional' or 'full'.")
-        return 0
-
     leaves = set()
 
     if classification in ["structural", "full"]:
@@ -111,61 +107,95 @@ def get_n_ss_annotated(studyset_leaves, class_to_check, class_to_leaf_map, class
         leaf_descendants = set(class_to_leaf_map.get(class_to_check, []))
         leaves.update(leaf_descendants)
 
-    if classification in ["functional", "full"]:
-        # Get all roles (direct + inherited from ancestors + role ancestors)
-        all_roles = class_to_all_roles_map.get(class_to_check, [])
-        for role in all_roles:
-            leaves.update(roles_to_leaves_map.get(role, []))
+        # count how many study classes appear in those leaf descendants
+        n_ss_annotated = len(leaves.intersection(set(studyset_leaves)))
+        return n_ss_annotated
+    
+    # if classification in ["functional", "full"]:
+    #     # Get all roles (direct + inherited from ancestors + role ancestors)
+    #     all_roles = class_to_all_roles_map.get(class_to_check, [])
+    #     for role in all_roles:
+    #         leaves.update(roles_to_leaves_map.get(role, []))
 
-    # count how many study classes appear in those leaf descendants
+    else:
+        print(f"Classification {classification} is not supported for counting classes.")
+        return 0
+
+def get_n_ss_annotated_for_roles(studyset_leaves, class_to_check, class_to_all_roles_map, roles_to_leaves_map):
+    leaves = set()
+    leaves.update(roles_to_leaves_map.get(class_to_check, []))
     n_ss_annotated = len(leaves.intersection(set(studyset_leaves)))
-
     return n_ss_annotated
 
-def get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map, class_to_all_roles_map, roles_to_leaves_map):
+def get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map, class_to_all_roles_map, roles_to_leaves_map, studyset_ancestors_roles):
 
-    #n_bg_leaves and n_ss_leaves will be the same for all classes
+    # n_bg_leaves and n_ss_leaves will be the same for all classes
     n_bg_leaves = count_removed_leaves(removed_leaves_csv)
     n_ss_leaves = len(studyset_leaves)
 
     results =  {} # dictionary to hold results
 
-    for class_to_check in studyset_ancestors:
+    if classification in ["structural", "full"]:
 
-        # print(f"Calculating enrichment for class {class_to_check}...")
+        # Calculate enrichment for structural ancestors
+        for class_to_check in studyset_ancestors:
 
-        _, n_bg_annotated = count_removed_classes_for_class(
-            class_to_check,
-            class_to_leaf_map,
-            classification,
-            class_to_all_roles_map,
-            roles_to_leaves_map,
-        )
-        n_ss_annotated = get_n_ss_annotated(
-            studyset_leaves,
-            class_to_check,
-            class_to_leaf_map,
-            classification,
-            class_to_all_roles_map,
-            roles_to_leaves_map,
-        )
+            # print(f"Calculating enrichment for class {class_to_check}...")
 
-        odds, p_value = calculate_p_value(n_ss_annotated, n_ss_leaves, n_bg_annotated, n_bg_leaves)
+            _, n_bg_annotated = count_removed_classes_for_class(
+                class_to_check,
+                class_to_leaf_map,
+                classification,
+                class_to_all_roles_map,
+                roles_to_leaves_map,
+            )
+            n_ss_annotated = get_n_ss_annotated(
+                studyset_leaves,
+                class_to_check,
+                class_to_leaf_map,
+                classification,
+                class_to_all_roles_map,
+                roles_to_leaves_map,
+            )
 
-        # Debug output
-        # if n_ss_annotated == 0 or n_bg_annotated == 0:
-            # print(f"DEBUG {class_to_check}: n_ss_annotated={n_ss_annotated}, n_bg_annotated={n_bg_annotated}, p={p_value}")
+            odds, p_value = calculate_p_value(n_ss_annotated, n_ss_leaves, n_bg_annotated, n_bg_leaves)
 
-        results[class_to_check]={
-            "class": id_to_name(class_to_check),
-            # "class_id": strip_prefix(class_to_check),
-            "n_ss_annotated": n_ss_annotated,
-            "n_ss_leaves": n_ss_leaves,
-            "n_bg_annotated": n_bg_annotated,
-            "n_bg_leaves": n_bg_leaves,
-            "odds_ratio": odds,
-            "p_value": p_value
-        }
+            results[class_to_check]={
+                "class": id_to_name(class_to_check),
+                # "class_id": strip_prefix(class_to_check),
+                "n_ss_annotated": n_ss_annotated,
+                "n_ss_leaves": n_ss_leaves,
+                "n_bg_annotated": n_bg_annotated,
+                "n_bg_leaves": n_bg_leaves,
+                "odds_ratio": odds,
+                "p_value": p_value
+            }
+
+        # if classification == "functional" or classification == "full":
+        # # Update studyset_ancestors_roles with the roles associated (direct + inherited from ancestors) with the current class being checked
+        # # These roles will be added to the graph
+        #     studyset_ancestors_roles.update(class_to_all_roles_map.get(class_to_check, []))
+
+    # Calculate enrichment for role classes
+    if classification in ["functional", "full"] and studyset_ancestors_roles:
+        print(f"Calculating enrichment for {len(studyset_ancestors_roles)} roles...")
+        
+        for role_to_check in studyset_ancestors_roles:
+            _, n_bg_annotated = count_removed_classes_for_roles(role_to_check, class_to_leaf_map, classification, roles_to_leaves_map)
+            n_ss_annotated = get_n_ss_annotated_for_roles(studyset_leaves, role_to_check, class_to_all_roles_map, roles_to_leaves_map)
+           
+            odds, p_value = calculate_p_value(n_ss_annotated, n_ss_leaves, n_bg_annotated, n_bg_leaves)
+            
+            results[role_to_check]={
+                "class": id_to_name(role_to_check),
+                "n_ss_annotated": n_ss_annotated,
+                "n_ss_leaves": n_ss_leaves,
+                "n_bg_annotated": n_bg_annotated,
+                "n_bg_leaves": n_bg_leaves,
+                "odds_ratio": odds,
+                "p_value": p_value
+            }
+
     return results
 
 def print_enrichment_results(enrichment_results):
@@ -181,14 +211,6 @@ def print_enrichment_results(enrichment_results):
         print(f"{r['class']:45} {r['p_value']:.4e}      {corrected_p_str:20}")
 
 """ Graphing and pruning stategies """
-# TODO: look over pruning strategies and loops as explained in article
-# TODO: look over p value pruning
-
-# TODO: Add pruning methods to not have to enrich as many classes
-# TODO: Add multiple testing correction
-
-# TODO: Maybe remove leaves from graph? Now they are there to be able to start the graph from them. Becomes a proble in high p-value pruning because they do not have p-values.
-
 
 def run_enrichment_analysis(studyset_list,
                             bonferroni_correct=False,
@@ -237,13 +259,43 @@ def run_enrichment_analysis(studyset_list,
     # print(f"Study set ancestors: {studyset_ancestors_all}")
     print(f"Number of study set ancestors: {len(studyset_ancestors_all)}")
 
-    # Time to create the graph
-    time_start = time.time()
-    G = create_graph_from_map(studyset_leaves, parent_map_file, max_n_leaf_classes=inf)
-    time_end = time.time()
-    print(f"Graph creation time: {time_end - time_start} seconds")
-    pruned_G = G.copy()
+    if classification in ["functional", "full"]:
+        # Collect roles associated with structural ancestors AND leaves
+        studyset_ancestors_roles = set()
+        
+        # Add roles from leaves
+        for leaf in studyset_leaves:
+            studyset_ancestors_roles.update(class_to_all_roles_map.get(leaf, []))
+        
+        # Add roles from structural ancestors
+        for class_to_check in studyset_ancestors_all:
+            studyset_ancestors_roles.update(class_to_all_roles_map.get(class_to_check, []))
+        
+        # Also include all ancestors of these roles (they will appear in the graph)
+        with open(parent_map_file, 'r') as f:
+            parent_map = json.load(f)
+        
+        roles_with_ancestors = set(studyset_ancestors_roles)
+        to_process = list(studyset_ancestors_roles)
+        
+        while to_process:
+            role = to_process.pop(0)
+            for parent in parent_map.get(role, []):
+                if parent not in roles_with_ancestors:
+                    roles_with_ancestors.add(parent)
+                    to_process.append(parent)
+        
+        studyset_ancestors_roles = roles_with_ancestors
+        print(f"Number of roles (including ancestors): {len(studyset_ancestors_roles)}")
+    else:
+        studyset_ancestors_roles = set()
+  
+    G = create_graph_with_roles_and_structures(studyset_leaves, studyset_ancestors_all, 
+                            studyset_ancestors_roles, parent_map_file, 
+                            class_to_all_roles_map, classification)
 
+    
+    pruned_G = G.copy()
 
     all_removed_nodes = set()
 
@@ -276,7 +328,6 @@ def run_enrichment_analysis(studyset_list,
     else:
         studyset_ancestors = studyset_ancestors_all
 
-    time_start_total = time.time()
     enrichment_results = get_enrichment_values(
         removed_leaves_csv,
         classification,
@@ -285,14 +336,12 @@ def run_enrichment_analysis(studyset_list,
         class_to_leaf_map,
         class_to_all_roles_map,
         roles_to_leaves_map,
+        studyset_ancestors_roles
     )
-    time_end_total = time.time()
-    print(f"Total time to get enrichment values: {time_end_total - time_start_total} seconds")
 
     #print("Enrichment results:")
     #print_enrichment_results(enrichment_results)
 
-    time_start_total = time.time()
     if bonferroni_correct:
         print("Applying Bonferroni correction to p-values...")
         enrichment_results, correction_map = bonferroni_correction(enrichment_results)
@@ -303,9 +352,7 @@ def run_enrichment_analysis(studyset_list,
         enrichment_results = benjamini_hochberg_fdr_correction(enrichment_results)
         # print("Enrichment results after Benjamini-Hochberg correction:")
         # print_enrichment_results(enrichment_results)
-    time_end_total = time.time()
-    print(f"Total time for multiple testing correction: {time_end_total - time_start_total} seconds")
-
+    
     if high_p_value_prune: # Uses corrected p-values if correction was applied
         print(f"High p-value pruner activated, pruning nodes with p-value above {p_value_threshold}")
 
@@ -402,6 +449,37 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
 
     all_removed_nodes = set()
 
+    if classification in ["functional", "full"]:
+        # Collect roles associated with leaves AND structural ancestors
+        studyset_ancestors_roles = set()
+        
+        # Add roles from leaves
+        for leaf in studyset_leaves:
+            studyset_ancestors_roles.update(class_to_all_roles_map.get(leaf, []))
+        
+        # Add roles from structural ancestors
+        for class_to_check in studyset_ancestors:
+            studyset_ancestors_roles.update(class_to_all_roles_map.get(class_to_check, []))
+        
+        # Also include all ancestors of these roles (they will appear in the graph)
+        with open(parent_map_file, 'r') as f:
+            parent_map = json.load(f)
+        
+        roles_with_ancestors = set(studyset_ancestors_roles)
+        to_process = list(studyset_ancestors_roles)
+        
+        while to_process:
+            role = to_process.pop(0)
+            for parent in parent_map.get(role, []):
+                if parent not in roles_with_ancestors:
+                    roles_with_ancestors.add(parent)
+                    to_process.append(parent)
+        
+        studyset_ancestors_roles = roles_with_ancestors
+        print(f"Number of roles (including all ancestors): {len(studyset_ancestors_roles)}")
+    else:
+        studyset_ancestors_roles = set()
+
     enrichment_results = get_enrichment_values(
         removed_leaves_csv,
         classification,
@@ -410,6 +488,7 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
         class_to_leaf_map,
         class_to_all_roles_map,
         roles_to_leaves_map,
+        studyset_ancestors_roles
     )
 
     print("Enrichment results:")
@@ -419,7 +498,9 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
     print("Enrichment results after Benjamini-Hochberg correction:")
     print_enrichment_results(enrichment_results)
 
-    pre_pruned_G = create_graph_from_map(studyset_leaves, parent_map_file, max_n_leaf_classes=inf)
+    pre_pruned_G = create_graph_with_roles_and_structures(studyset_leaves, studyset_ancestors, 
+                            studyset_ancestors_roles, parent_map_file, 
+                            class_to_all_roles_map, classification)
     G = pre_pruned_G.copy()
 
     ## Pre-loop phase ##
@@ -459,8 +540,6 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
         }
 
         current_enrichment = benjamini_hochberg_fdr_correction(current_enrichment)
-
-        # TODO: Molecule Leaves Pruner to be implemented, if needed. Do not understand why this is in the loop phase.
         
         G, removed_nodes = high_p_value_branch_pruner(G, current_enrichment, p_value_threshold)
         all_removed_nodes.update(removed_nodes)

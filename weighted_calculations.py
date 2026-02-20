@@ -12,6 +12,7 @@ from visualitations_and_pruning import (
     high_p_value_branch_pruner,
     zero_degree_pruner,
     create_graph_from_map,
+    create_graph_with_roles_and_structures,
     id_to_name,
     )
 from multiple_test_corrections import bonferroni_correction, benjamini_hochberg_fdr_correction
@@ -408,6 +409,7 @@ def get_enrichment_values_with_weights(removed_leaves_csv, classification,
     
     n_bg_leaves = count_removed_leaves(removed_leaves_csv)
     n_ss_leaves = len(studyset_leaves)
+
     
     for class_iri in studyset_ancestors:
         # Calculate counts
@@ -488,7 +490,7 @@ def run_weighted_enrichment_analysis_plain_enrich_pruning_strategy(weights_dict,
     if not weights_dict:
         return {"study_set": [], "removed_nodes": [], "enrichment_results": {}}, None
 
-    weights_dict = {normalize_id(cls): weight for cls, weight in weights_dict.items()}
+    weights_dict = {normalize_id(cls): weight for cls, weight in weights_dict.items()} # Normalize IDs in weights_dict to ensure they match the format used in maps
     studyset_list = list(weights_dict.keys())
 
     studyset_leaves = get_leaves(studyset_list, removed_leaves_csv, class_to_leaf_map)
@@ -497,6 +499,7 @@ def run_weighted_enrichment_analysis_plain_enrich_pruning_strategy(weights_dict,
     studyset_ancestors = get_ancestors_for_inputs(studyset_leaves, leaf_to_ancestors_map_file)
     print(f"Study set ancestors: {studyset_ancestors}")
     print(f"Number of study set ancestors: {len(studyset_ancestors)}")
+
 
     all_removed_nodes = set()
 
