@@ -3,7 +3,7 @@
 BiNChE2 is an updated version of [BiNChE](https://github.com/pcm32/BiNCheWeb/wiki/BiNChE#graph-pruning-strategies). It is a tool for ontology-based chemical enrichment analysis. It is based on the [ChEBI](https://www.ebi.ac.uk/chebi/) ontology of chemical entities.
 
 ## The Web Application
-The web application is available at https://binche2.hastingslab.org/
+The web application is available at https://binche2.hastingslab.org/.
 
 ### Running The Analysis
 
@@ -33,6 +33,10 @@ Pruning options are available to make the graph less cluttered. The following pr
 If you manually choose which pruning strategies to apply, they will be implemented once each. Alternatively, pruning strategies can be implemented in a looping manner. In this scenario, there is first a pre-loop phase where pruners are applied once, and then a loop phase where pruners are applied in a loop until no more changes are made. The looping option is:
 
 * **Plain Enrichment Pruning Strategy:** The pre-loop phase applies the high p-value branch pruner (with a threshold of 0.05), the linear branch collapser pruner (with n = 0), and the root children pruner (levels = 2). The loop phase applies the high p-value branch pruner (with a threshold of 0.05), the linear branch collapser pruner (with n = 0), and the zero-degree vertex pruner. Benjamini-Hochberg is used as the p-value correction method.
+
+### Calculations
+
+To perform enrichment analysis calculations, Fisher's exact test is used for P-value calculations. For weighted enrichment analysis however, a SaddleSum method is used. 
 
 ### The Graph
 
