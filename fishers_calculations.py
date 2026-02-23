@@ -245,17 +245,12 @@ def run_enrichment_analysis(studyset_list,
     # Normalize study set IDs to full IRIs
     studyset_list = [normalize_id(cls) for cls in studyset_list]
 
-    time_start_total = time.time()
+   
     studyset_leaves = get_leaves(studyset_list, removed_leaves_csv, class_to_leaf_map)
     #print(f"Study set leaves: {studyset_leaves}")
-    time_end_total = time.time()
-    print(f"Total time to get study set leaves: {time_end_total - time_start_total} seconds")
-
-    time_start_total = time.time()
+    
     studyset_ancestors_all = get_ancestors_for_inputs(studyset_leaves, leaf_to_ancestors_map_file)
-    time_end_total = time.time()
-    print(f"Total time to get study set ancestors: {time_end_total - time_start_total} seconds")
-
+    
     # print(f"Study set ancestors: {studyset_ancestors_all}")
     print(f"Number of study set ancestors: {len(studyset_ancestors_all)}")
 
@@ -311,16 +306,13 @@ def run_enrichment_analysis(studyset_list,
             # print(f"Removed nodes by root children pruner: {removed_nodes}")
             all_removed_nodes.update(removed_nodes)
 
-        time_start_total = time.time()
         if linear_branch_prune:
             print(f"Linear branch pruner activated, keeping only every {n}-th node in linear branches")
             
             pruned_G, removed_nodes = linear_branch_collapser_pruner_remove_less(pruned_G, n)
             # print(f"Removed nodes by linear branch pruner: {removed_nodes}")
             all_removed_nodes.update(removed_nodes)
-        time_end_total = time.time()
-        print(f"Total time for linear branch pruning: {time_end_total - time_start_total} seconds")
-
+        
         # Remove pruned nodes from studyset_ancestors_all
         studyset_ancestors = [cls for cls in studyset_ancestors_all if cls not in all_removed_nodes]
         print(f"Number of study set ancestors after before-enrichment pruning: {len(studyset_ancestors)}")
