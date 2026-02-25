@@ -12,6 +12,7 @@ import uuid
 import time
 import glob
 import uuid
+import requests
 
 
 app = Flask(__name__)
@@ -61,6 +62,16 @@ def parse_studyset(studyset: str):
         if value.startswith("CHEBI:"):
             return value.replace(":", "_")
         return value.replace(":", "_")
+    
+    def is_smiles(value: str) -> bool:
+        """Detect if a string is likely a SMILES string."""
+        value = value.strip()
+        # Not a SMILES if it starts with CHEBI: or http
+        if value.startswith("CHEBI:") or value.startswith("http://") or value.startswith("https://"):
+            return False
+        # SMILES typically contain lowercase letters, parentheses, or specific chars
+        smiles_chars = set('cCnNoOpPsSFfIiBbr[]()=#@+-\\/')
+        return any(c in smiles_chars for c in value)
 
     # Split by lines first to support optional weights per line
     for line in studyset.splitlines():
@@ -73,19 +84,74 @@ def parse_studyset(studyset: str):
         if len(parts) >= 2:
             try:
                 weight = float(parts[1])
-                class_id = normalize_id(parts[0])
-                studyset_list.append(class_id)
-                weights_dict[class_id] = weight
+                # Check if first part is SMILES
+                if is_smiles(parts[0]):
+                    chebi_ids = convert_smiles_to_chebi(parts[0])
+                    # Apply the same weight to all resulting ChEBI IDs
+                    for chebi_id in chebi_ids:
+                        class_id = normalize_id(chebi_id)
+                        studyset_list.append(class_id)
+                        weights_dict[class_id] = weight
+                else:
+                    class_id = normalize_id(parts[0])
+                    studyset_list.append(class_id)
+                    weights_dict[class_id] = weight
                 continue
             except ValueError:
                 pass
 
         # Fallback: treat all parts as IDs without weights
         for part in parts:
-            class_id = normalize_id(part)
-            studyset_list.append(class_id)
+            if is_smiles(part):
+                chebi_ids = convert_smiles_to_chebi(part)
+                for chebi_id in chebi_ids:
+                    class_id = normalize_id(chebi_id)
+                    studyset_list.append(class_id)
+            else:
+                class_id = normalize_id(part)
+                studyset_list.append(class_id)
 
     return studyset_list, weights_dict
+
+def convert_smiles_to_chebi(smiles_string):
+    """Convert a single SMILES string to ChEBI IDs. Returns a list of ChEBI IDs."""
+    chebi_ids = []
+
+    # Get details from ChEBI lookup to check for a direct match to a ChEBI ID
+    response = requests.post("https://chebifier.hastingslab.org/api/details", json={
+        "type": "type",
+        "smiles": smiles_string,
+        "selectedModels": {
+            "ChEBI Lookup": True
+        }
+    })
+    
+    lookup_infotext = response.json().get("models", {}).get("ChEBI Lookup", {}).get("highlights", [])
+    
+    # If the lookup highlights contain a ChEBI ID, use that for classification instead of the SMILES string. 
+    if lookup_infotext and "CHEBI:" in lookup_infotext[0][1]:
+        chebi_id = lookup_infotext[0][1].split("CHEBI:")[1].split()[0].rstrip('.')
+        chebi_ids.append(f"CHEBI:{chebi_id}")
+        print(f"Found ChEBI ID from lookup: CHEBI:{chebi_id} for SMILES {smiles_string}")
+    else:
+        # Get direct parents from classification
+        response = requests.post("https://chebifier.hastingslab.org/api/classify", json={
+            "smiles": smiles_string,
+            "ontology": False,
+            "selectedModels": {
+                "ELECTRA (ChEBI50-3STAR)": True,
+            }
+        })
+        
+        direct_parents = response.json().get("direct_parents")
+        if direct_parents:
+            # Extract ChEBI IDs from all parent lists
+            for parent_list in direct_parents:
+                parent_ids = [f"CHEBI:{parent[0]}" for parent in parent_list]
+                chebi_ids.extend(parent_ids)
+            print(f"Found {len(chebi_ids)} ChEBI IDs from classification for SMILES {smiles_string}")
+    
+    return chebi_ids
 
 def map_p_value_correction_method(method_name):
     if method_name == 'bonferroni':
