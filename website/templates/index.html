@@ -12,12 +12,13 @@
     <form action="/submission" method="POST" class="main-form">
 
         <p>Welcome to the BiNChE2!</p>
-        <p>Here, you can submit your study set for enrichment analysis based on the ChEBI ontology. </p>
-        <h4 class="mb-4">Input Study Set:</h4>
+        <p>Here, you can submit your study set for enrichment analysis based on the <a href="https://www.ebi.ac.uk/chebi/" style="color: #0f808d; text-decoration: none;">ChEBI ontology</a>. </p>
+        <h4 class="mb-4">Input Study Set</h4>
 
+        <p>The input molecular entitites should either be in ChEBI ID format (e.g., CHEBI:16236) or as SMILES (eg. C2H6O). A mix of both is allowed.</p>
         <p>Example submission format:</p>
         <pre>
-CHEBI:77030
+CHEBI:77030     
 CHEBI:79036
         </pre>
 
@@ -26,11 +27,12 @@ CHEBI:79036
 CHEBI:17079	0.7665
 CHEBI:46816	0.7465
         </pre>
+        
         <textarea name="study_set" class="study-set" rows="17" cols="80"
             placeholder="Enter your study set here"></textarea>
 
         <br><br>
-        <h4>Specify Target of Enrichment:</h4>
+        <h4>Specify Target of Enrichment</h4>
 
         <div class="mb-3">
             <div class="form-chek">

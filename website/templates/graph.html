@@ -382,6 +382,7 @@
 
         // Default view: Show only significant nodes (p <= 0.05) with their paths to roots
         // If no significant nodes exist, fall back to nodes with p < 1
+        // If still no nodes found, show all nodes
         
         // First, hide all nodes and edges
         cy.nodes().style('display', 'none');
@@ -401,41 +402,47 @@
             });
         }
         
-        // Set to track all nodes to display
-        const nodesToShow = new Set();
-        
-        // For each significant node, find all paths to roots and mark nodes
-        significantNodes.forEach(sigNode => {
-            nodesToShow.add(sigNode.id());
+        // If still no nodes found, show all nodes
+        if (significantNodes.length === 0) {
+            cy.nodes().style('display', 'element');
+            cy.edges().style('display', 'element');
+        } else {
+            // Set to track all nodes to display
+            const nodesToShow = new Set();
             
-            // Traverse upward to find all ancestors (parents) until reaching a root
-            const traverseToRoot = (node) => {
-                // Get outgoing edges (to parents in this directed graph)
-                const parentEdges = node.outgoers('edge');
+            // For each significant node, find all paths to roots and mark nodes
+            significantNodes.forEach(sigNode => {
+                nodesToShow.add(sigNode.id());
                 
-                parentEdges.forEach(edge => {
-                    const parent = edge.target();
-                    if (!nodesToShow.has(parent.id())) {
-                        nodesToShow.add(parent.id());
-                        traverseToRoot(parent); // Recursively traverse
+                // Traverse upward to find all ancestors (parents) until reaching a root
+                const traverseToRoot = (node) => {
+                    // Get outgoing edges (to parents in this directed graph)
+                    const parentEdges = node.outgoers('edge');
+                    
+                    parentEdges.forEach(edge => {
+                        const parent = edge.target();
+                        if (!nodesToShow.has(parent.id())) {
+                            nodesToShow.add(parent.id());
+                            traverseToRoot(parent); // Recursively traverse
+                        }
+                    });
+                };
+                
+                traverseToRoot(sigNode);
+            });
+            
+            // Show the nodes and their connecting edges
+            nodesToShow.forEach(nodeId => {
+                const node = cy.getElementById(nodeId);
+                node.style('display', 'element');
+                // Show edges between visible nodes
+                node.connectedEdges().forEach(edge => {
+                    if (nodesToShow.has(edge.source().id()) && nodesToShow.has(edge.target().id())) {
+                        edge.style('display', 'element');
                     }
                 });
-            };
-            
-            traverseToRoot(sigNode);
-        });
-        
-        // Show the nodes and their connecting edges
-        nodesToShow.forEach(nodeId => {
-            const node = cy.getElementById(nodeId);
-            node.style('display', 'element');
-            // Show edges between visible nodes
-            node.connectedEdges().forEach(edge => {
-                if (nodesToShow.has(edge.source().id()) && nodesToShow.has(edge.target().id())) {
-                    edge.style('display', 'element');
-                }
             });
-        });
+        }
 
         // Show/hide nodes when respective menu item is clicked
         document.querySelectorAll('.show-hide-option').forEach(item => {
@@ -525,6 +532,7 @@
                                 return p != null && p < 1;
                             });
                         }
+
                         
                         // Set to track all nodes to display
                         const nodesToShow = new Set();

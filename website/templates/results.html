@@ -69,8 +69,16 @@
 </table>
 
 <h2 class="grey"> Log of Analysis </h2>
-<p class="muted-log">Analysed leaves: {{results.study_set}}</p>
-<p class="muted-log">Removed nodes: {{results.removed_nodes}}</p>
+<p class="muted-log"><strong>Analysed leaves:</strong> {{results.study_set}}</p>
+<p class="muted-log"><strong>Removed nodes:</strong> {{results.removed_nodes}}</p>
+{% if unresolved_smiles %}
+<p class="muted-log"><strong>Unresolved SMILES</strong> (could not find ChEBI ID or parents):</p>
+<ul class="muted-log" style="margin-left: 20px;">
+{% for smiles in unresolved_smiles %}
+    <li>{{ smiles }}</li>
+{% endfor %}
+</ul>
+{% endif %}
 
 <script> // Not ideal since this is mixing Jinja2 template syntax (server-side) with JavaScript (client-side) but it works for now.
 document.getElementById('downloadCsv').addEventListener('click', function(e) {

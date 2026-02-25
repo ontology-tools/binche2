@@ -51,9 +51,10 @@ def parse_studyset(studyset: str):
 
     studyset_list = []
     weights_dict = {}
+    unresolved_smiles = []
 
     if not studyset:
-        return studyset_list, weights_dict
+        return studyset_list, weights_dict, unresolved_smiles
 
     def normalize_id(raw_id: str) -> str:
         value = raw_id.strip().replace('"', "")
@@ -86,7 +87,9 @@ def parse_studyset(studyset: str):
                 weight = float(parts[1])
                 # Check if first part is SMILES
                 if is_smiles(parts[0]):
-                    chebi_ids = convert_smiles_to_chebi(parts[0])
+                    chebi_ids, was_resolved = convert_smiles_to_chebi(parts[0])
+                    if not was_resolved:
+                        unresolved_smiles.append(parts[0])
                     # Apply the same weight to all resulting ChEBI IDs
                     for chebi_id in chebi_ids:
                         class_id = normalize_id(chebi_id)
@@ -103,7 +106,9 @@ def parse_studyset(studyset: str):
         # Fallback: treat all parts as IDs without weights
         for part in parts:
             if is_smiles(part):
-                chebi_ids = convert_smiles_to_chebi(part)
+                chebi_ids, was_resolved = convert_smiles_to_chebi(part)
+                if not was_resolved:
+                    unresolved_smiles.append(part)
                 for chebi_id in chebi_ids:
                     class_id = normalize_id(chebi_id)
                     studyset_list.append(class_id)
@@ -111,11 +116,12 @@ def parse_studyset(studyset: str):
                 class_id = normalize_id(part)
                 studyset_list.append(class_id)
 
-    return studyset_list, weights_dict
+    return studyset_list, weights_dict, unresolved_smiles
 
 def convert_smiles_to_chebi(smiles_string):
-    """Convert a single SMILES string to ChEBI IDs. Returns a list of ChEBI IDs."""
+    """Convert a single SMILES string to ChEBI IDs. Returns a tuple (chebi_ids_list, was_resolved)."""
     chebi_ids = []
+    was_resolved = False
 
     # Get details from ChEBI lookup to check for a direct match to a ChEBI ID
     response = requests.post("https://chebifier.hastingslab.org/api/details", json={
@@ -132,9 +138,11 @@ def convert_smiles_to_chebi(smiles_string):
     if lookup_infotext and "CHEBI:" in lookup_infotext[0][1]:
         chebi_id = lookup_infotext[0][1].split("CHEBI:")[1].split()[0].rstrip('.')
         chebi_ids.append(f"CHEBI:{chebi_id}")
+        was_resolved = True
         print(f"Found ChEBI ID from lookup: CHEBI:{chebi_id} for SMILES {smiles_string}")
     else:
         # Get direct parents from classification
+        print(f"No direct ChEBI ID found from lookup for SMILES {smiles_string}, attempting classification...")
         response = requests.post("https://chebifier.hastingslab.org/api/classify", json={
             "smiles": smiles_string,
             "ontology": False,
@@ -147,11 +155,18 @@ def convert_smiles_to_chebi(smiles_string):
         if direct_parents:
             # Extract ChEBI IDs from all parent lists
             for parent_list in direct_parents:
-                parent_ids = [f"CHEBI:{parent[0]}" for parent in parent_list]
-                chebi_ids.extend(parent_ids)
+                if parent_list is not None:
+                    parent_ids = [f"CHEBI:{parent[0]}" for parent in parent_list]
+                    chebi_ids.extend(parent_ids)
+                else:
+                    print(f"No parents found in one of the classification results for SMILES {smiles_string}")
+                    # print response content for debugging
+                    print(f"Classification response content: {response.content}")
+            if chebi_ids:
+                was_resolved = True
             print(f"Found {len(chebi_ids)} ChEBI IDs from classification for SMILES {smiles_string}")
     
-    return chebi_ids
+    return chebi_ids, was_resolved
 
 def map_p_value_correction_method(method_name):
     if method_name == 'bonferroni':
@@ -175,7 +190,7 @@ def run_analysis():
     if not raw_studyset:
         return redirect(url_for('submission'))
     # Convert multi-line or comma-separated input into a list
-    studyset_list, weights_dict = parse_studyset(raw_studyset)
+    studyset_list, weights_dict, unresolved_smiles = parse_studyset(raw_studyset)
     
     # Auto-scale weights if present (only scales up if max < 1000)
     # if weights_dict:
@@ -209,7 +224,9 @@ def run_analysis():
             'method': 'plain_enrich'
         }
 
-        return render_template('results.html', results=results, graph_json_file=graph_json_file)
+        session['unresolved_smiles'] = unresolved_smiles
+
+        return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles)
 
     # P-VALUE CORRECTION METHOD
     method = request.form.get("p_value_correction_method")
@@ -271,7 +288,9 @@ def run_analysis():
         'benjamini_hochberg_correct': benjamini_hochberg_correct
     }
 
-    return render_template('results.html', results=results, graph_json_file=graph_json_file)
+    session['unresolved_smiles'] = unresolved_smiles
+
+    return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles)
 
 @app.route('/graph')
 def graph():
