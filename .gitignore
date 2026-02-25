@@ -1,5 +1,6 @@
-data/
+data*/
 website/static/data/
+logs/
 
 # Python
 __pycache__/
