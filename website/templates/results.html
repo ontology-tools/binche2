@@ -28,6 +28,7 @@
 {% block body %}
 <div style="padding: 20px 40px;">
 <h3 class="mt-4 mb-3">Enrichment Analysis Results</h3>
+<p>Removed classes are specified below the results table.</p>
 
 <a href="#" id="downloadCsv" class="btn btn-primary"
     style="background:#0f808d; border-color:#0f808d; margin:20px 5px 20px 0;">
@@ -68,11 +69,19 @@
 
 </table>
 
-<h2 class="grey"> Log of Analysis </h2>
+<h2 class="grey"> Processing Summary </h2>
 <p class="muted-log"><strong>Analysed leaves:</strong> {{results.study_set}}</p>
-<p class="muted-log"><strong>Removed nodes:</strong> {{results.removed_nodes}}</p>
-{% if unresolved_smiles %}
+<p class="muted-log"><strong>Removed nodes:</strong> (through pruning) {{results.removed_nodes}}</p>
+{% if unresolved_smiles and smiles_option == 'use_parents' %}
 <p class="muted-log"><strong>Unresolved SMILES</strong> (could not find ChEBI ID or parents):</p>
+<ul class="muted-log" style="margin-left: 20px;">
+{% for smiles in unresolved_smiles %}
+    <li>{{ smiles }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% if unresolved_smiles and smiles_option == 'exclude' %}
+<p class="muted-log"><strong>Excluded SMILES</strong> (unmapped, not included in analysis):</p>
 <ul class="muted-log" style="margin-left: 20px;">
 {% for smiles in unresolved_smiles %}
     <li>{{ smiles }}</li>

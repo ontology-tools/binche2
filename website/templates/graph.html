@@ -703,6 +703,32 @@
                             </label>
                         </div>
                     </div>
+                    <hr class="my-3" style="opacity: 0.3;">
+
+                    <!-- SMILES HANDLING OPTIONS -->
+                    <div class="mb-3">
+                        <h6>Using SMILES:</h6>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="smiles_option" id="smiles_use_parents" value="use_parents" 
+                            {% if smiles_option == 'use_parents' %} checked {% endif %}>
+                            <label class="form-check-label" for="smiles_use_parents">
+                                Use predicted parents for unmapped SMILES
+                                <button type="button" class="btn btn-sm btn-link p-0 info-button" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Using Predicted Parents" data-bs-content="When SMILES molecules cannot be directly mapped to a ChEBI ID, the most likely parents are predicted and used for the analysis. If your results show many nodes with weak enrichment using this option, try excluding unmapped SMILES instead." style="vertical-align: baseline;">
+                                    🛈
+                                </button>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="smiles_option" id="smiles_exclude" value="exclude"
+                            {% if smiles_option == 'exclude' %} checked {% endif %}>
+                            <label class="form-check-label" for="smiles_exclude">
+                                Exclude unmapped SMILES
+                                <button type="button" class="btn btn-sm btn-link p-0 info-button" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Excluding Unmapped SMILES" data-bs-content="Unmapped SMILES molecules are excluded from the analysis and are displayed in the results section (the previous page)." style="vertical-align: baseline;">
+                                    🛈
+                                </button>
+                            </label>
+                        </div>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer justify-content-start">
@@ -711,5 +737,22 @@
         </div>
     </div>
 </div>
+
+<style>
+    .info-button {
+        text-decoration: none;
+    }
+    .info-button:hover {
+        text-decoration: none;
+    }
+</style>
+
+<script>
+    // Initialize Bootstrap popovers
+    document.addEventListener('DOMContentLoaded', function() {
+        const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+        const popoverList = popoverTriggerList.map(popoverTriggerEl => new bootstrap.Popover(popoverTriggerEl))
+    });
+</script>
 
 {% endblock %}

@@ -11,7 +11,7 @@
     <div class="main-container">
     <form action="/submission" method="POST" class="main-form">
 
-        <p>Welcome to the BiNChE2!</p>
+        <p>Welcome to BiNChE2!</p>
         <p>Here, you can submit your study set for enrichment analysis based on the <a href="https://www.ebi.ac.uk/chebi/" style="color: #0f808d; text-decoration: none;">ChEBI ontology</a>. </p>
         <h4 class="mb-4">Input Study Set</h4>
 
@@ -27,13 +27,64 @@ CHEBI:79036
 CHEBI:17079	0.7665
 CHEBI:46816	0.7465
         </pre>
+
+        <h5 class="mb-4">Using SMILES</h5>
+        <p>If using SMILES, please read the "About Using SMILES" section and specify your preference below.</p>
+        </p>
+
+        <div class="mb-4" style="margin-left: 20px;">
+            <div class="form-check">
+                <input type="radio" name="smiles_option" value="use_parents" id="use_parents" checked class="form-check-input">
+                <label for="use_parents" class="form-check-label">Use the direct parents of any unmapped SMILES</label>
+                <button type="button" class="btn btn-sm ms-2" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="modal" data-bs-target="#unmappedSmilesModal">
+                    🛈
+                </button>
+            </div>
+            <div class="form-check">
+                <input type="radio" name="smiles_option" value="exclude" id="exclude_unmapped" class="form-check-input">
+                <label for="exclude_unmapped" class="form-check-label">Exclude any unmapped SMILES</label>
+                <button type="button" class="btn btn-sm ms-2" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="modal" data-bs-target="#excludeSmilesModal">
+                    🛈
+                </button>
+            </div>
+        </div>
+
+        <!-- Modal for Exclude SMILES Description -->
+        <div class="modal fade" id="excludeSmilesModal" tabindex="-1" aria-labelledby="excludeSmilesModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="excludeSmilesModalLabel">Excluding Unmapped SMILES</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Unmapped SMILES will be displayed in the results section. Consider manually searching the <a href="https://www.ebi.ac.uk/chebi/" style="color: #0f808d; text-decoration: none;">ChEBI</a> database to identify appropriate IDs.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal for Unmapped SMILES Description -->
+        <div class="modal fade" id="unmappedSmilesModal" tabindex="-1" aria-labelledby="unmappedSmilesModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="unmappedSmilesModalLabel">Using Predicted Parents</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>If your results show many nodes with weak enrichment using this option, try excluding unmapped SMILES instead.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
         
         <textarea name="study_set" class="study-set" rows="17" cols="80"
             placeholder="Enter your study set here"></textarea>
 
         <br><br>
         <h4>Specify Target of Enrichment</h4>
-
+        <p>Read the "About Selecting Target of Enrichment" section for more information.</p>
         <div class="mb-3">
             <div class="form-chek">
                 <input type="radio" name="classification" value="structural" required class="form-check-input">
@@ -67,6 +118,15 @@ CHEBI:46816	0.7465
             of both classifications. Note that the structure classification is significantly larger than the role
             classification.
             <br>
+        </p>
+        <br>
+
+        <h4 class="mb-4">About Using SMILES</h4>
+
+        <p>When using SMILES, the enrichment analysis will be performed on the ChEBI entities that are mapped to the input SMILES. 
+            If a SMILES is not mapped to any ChEBI entity, its direct parent classes can be predicted (this is done with
+            <a href="https://chebifier.hastingslab.org/" style="color: #0f808d; text-decoration: none;">Chebifier</a>)
+            and used for the enrichment analysis. Alternatively, the unmapped SMILES can be completely excluded. 
         </p>
         <!-- The text above is copied directly from Binche ReadMe-->
     </div>

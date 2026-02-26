@@ -40,6 +40,9 @@ def submission():
         session['study_set'] = study_set # Store the study set in session
         classification = request.form.get('classification')
         session['classification'] = classification # Store classification in session
+        smiles_option = request.form.get('smiles_option')
+        session['smiles_option'] = smiles_option # Store smiles option in session
+        
         return render_template('submission.html', user_study_set=study_set)
     
     return render_template('submission.html', user_study_set=None)
@@ -142,29 +145,38 @@ def convert_smiles_to_chebi(smiles_string):
         print(f"Found ChEBI ID from lookup: CHEBI:{chebi_id} for SMILES {smiles_string}")
     else:
         # Get direct parents from classification
-        print(f"No direct ChEBI ID found from lookup for SMILES {smiles_string}, attempting classification...")
-        response = requests.post("https://chebifier.hastingslab.org/api/classify", json={
-            "smiles": smiles_string,
-            "ontology": False,
-            "selectedModels": {
-                "ELECTRA (ChEBI50-3STAR)": True,
-            }
-        })
-        
-        direct_parents = response.json().get("direct_parents")
-        if direct_parents:
-            # Extract ChEBI IDs from all parent lists
-            for parent_list in direct_parents:
-                if parent_list is not None:
-                    parent_ids = [f"CHEBI:{parent[0]}" for parent in parent_list]
-                    chebi_ids.extend(parent_ids)
-                else:
-                    print(f"No parents found in one of the classification results for SMILES {smiles_string}")
-                    # print response content for debugging
-                    print(f"Classification response content: {response.content}")
-            if chebi_ids:
-                was_resolved = True
-            print(f"Found {len(chebi_ids)} ChEBI IDs from classification for SMILES {smiles_string}")
+        smiles_option = session.get('smiles_option')
+
+        if smiles_option == 'use_parents':
+            print(f"No direct ChEBI ID found from lookup for SMILES {smiles_string}, attempting classification...")
+            response = requests.post("https://chebifier.hastingslab.org/api/classify", json={
+                "smiles": smiles_string,
+                "ontology": False,
+                "selectedModels": {
+                    "ELECTRA (ChEBI50-3STAR)": True,
+                }
+            })
+            
+            direct_parents = response.json().get("direct_parents")
+            if direct_parents:
+                # Extract ChEBI IDs from all parent lists
+                for parent_list in direct_parents:
+                    if parent_list is not None:
+                        parent_ids = [f"CHEBI:{parent[0]}" for parent in parent_list]
+                        chebi_ids.extend(parent_ids)
+                        # Print the parent IDs found
+                        print(f"Found direct parent ChEBI IDs from classification for SMILES {smiles_string}: {parent_ids}")
+                    else:
+                        print(f"No parents found in one of the classification results for SMILES {smiles_string}")
+                        # print response content for debugging
+                        print(f"Classification response content: {response.content}")
+                if chebi_ids:
+                    was_resolved = True
+                print(f"Found {len(chebi_ids)} ChEBI IDs from classification for SMILES {smiles_string}")
+
+        else:
+            print(f"No direct ChEBI ID found from lookup for SMILES {smiles_string}, excluding from analysis.")
+            
     
     return chebi_ids, was_resolved
 
@@ -226,7 +238,7 @@ def run_analysis():
 
         session['unresolved_smiles'] = unresolved_smiles
 
-        return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles)
+        return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'))
 
     # P-VALUE CORRECTION METHOD
     method = request.form.get("p_value_correction_method")
@@ -290,7 +302,7 @@ def run_analysis():
 
     session['unresolved_smiles'] = unresolved_smiles
 
-    return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles)
+    return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'))
 
 @app.route('/graph')
 def graph():
@@ -303,7 +315,8 @@ def graph():
                          graph_file=graph_file,
                          pruning=pruning, 
                          correction_method=correction_method,
-                         classification=classification)
+                         classification=classification,
+                         smiles_option=session.get('smiles_option'))
 
 
 
