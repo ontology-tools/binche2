@@ -7,7 +7,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem=20GB
 #SBATCH --gpus rtx3090:1
-#SBATCH --time=20:00:00
+#SBATCH --time=23:00:00
 #SBATCH --account metabolinkai
 
 echo Running on `hostname` at `date`
