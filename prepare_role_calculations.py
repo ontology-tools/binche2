@@ -315,8 +315,8 @@ if __name__ == "__main__":
             max_roles_class = max(roles_map.items(), key=lambda x: len(x[1]))
             print(f"Class with most roles: {max_roles_class[0]} ({len(max_roles_class[1])} roles)")
         
-        # Build leaf -> all roles map using leaf->parents JSON
-        create_leaves_to_all_roles_map(roles_map_json, leaves_to_all_parents_json, leaves_to_all_roles_json, parent_map_json)
+        # Build leaf -> all roles map using leaf->parents JSON (done below)
+        # create_leaves_to_all_roles_map(roles_map_json, leaves_to_all_parents_json, leaves_to_all_roles_json, parent_map_json)
 
         # Verification test for function find_has_role_connections_from_owl
         test_class_iri = "http://purl.obolibrary.org/obo/CHEBI_10002"

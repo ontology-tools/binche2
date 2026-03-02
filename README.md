@@ -10,7 +10,9 @@ The web application is available at https://binche2.hastingslab.org/.
 The web application is hosted at https://binche2.hastingslab.org/. To run calculations locally, execute `website/app.py`. Note that all necessary data files must be generated beforehand for local execution (as described in the [Workflow](#workflow) section below).
 
 ### Study Set
-On the home page, enter your study set as ChEBI IDs (one per line), as shown in the example. You can optionally provide weights for each compound (tab or space-separated). Then specify the target of enrichment:
+On the home page, enter your study set as ChEBI IDs (one per line), as shown in the example. You can optionally provide weights for each compound (tab or space-separated). Instead of ChEBI IDs, SMILES can be used to represent a molecular entity. If a SMILES string cannot be found in the ChEBI ontology, it's predicted direct parent classes will be used for enrichment calculations. The parent predictions are made with [Chebifier](https://chebifier.hastingslab.org/).
+
+Then specify the target of enrichment:
 
 - **Structure:** Enrichment based on ChEBI structural classification (molecular composition and connectivity)
 - **Role:** Enrichment based on ChEBI role classification (biological context or intended use)
@@ -50,7 +52,7 @@ Hovering over a node displays more detailed information about it. Both raw and c
 
 Nodes can be selected by clicking on them. Right-clicking on a node provides options such as 'Select first neighbors' and 'Select descendants'. 
 
-The graph will initially show only the most relevant branches. This means that all nodes with p-value under 0.05 will be shown, including all nodes in the paths from these nodes up to the root. If all nodes have a higher p-value, the same will be done but for nodes with p-value lower than 1.
+The graph will initially show only the most relevant branches. This means that all nodes with p-value under 0.05 will be shown, including all nodes in the paths from these nodes up to the root. If all nodes have a higher p-value, the same will be done but for nodes with p-value lower than 1. If there only exists nodes where all p-values are 1 or N/A, then all nodes will be shown.
 
 There are options to choose the layout of the graph, which nodes are shown, and how to export it. Note that if you change the target of enrichment or pruning options under Settings, all calculations will run again. 
 
@@ -59,7 +61,7 @@ There are options to choose the layout of the graph, which nodes are shown, and 
 #### 0. UV environment
 A uv environment with the following installations was used:
 
-```uv pip install py-horned-owl rdkit networkx matplotlib pandas tqdm flask flask_sqlalchemy scipy```
+```uv pip install py-horned-owl rdkit networkx matplotlib pandas tqdm flask flask_sqlalchemy scipy requests```
 
 #### 1. Load ChEBI
 Download and load the ChEBI ontology by running `load_chebi.py`. In the script, the OWL file is downloaded from https://ftp.ebi.ac.uk/pub/databases/chebi/ontology/chebi.owl and cached as `data/chebi.owl`. Re-running the script will not re-download the file if it already exists; delete `data/chebi.owl` if you want to attain a newer version. The version currently used in the webapplication was updated 2025.10.09.
@@ -123,8 +125,6 @@ The CSV contains `IRI`, `SMILES`, and `Classification`, where the classification
 
 
 #### 5. Fisher's Calculations
-
-Use `fishers_calculations.py` for enrichment runs.
 
 First (only needed once), run task *"build_class_to_leaf_map"* in `pre_fishers_calculations.py` to create `data/class_to_leaf_descendants_map.json`, which maps each class to all of its removed leaf descendants using `data/removed_leaf_classes_to_ALL_parents_map.json`. By default, leaf classes themselves are **not** included as keys in this map.
 

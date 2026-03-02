@@ -218,8 +218,6 @@ if __name__ == "__main__":
 
         print(f" The probability of success value for class {class_iri} is: {prob_of_success:.4g} ({n_subclasses} / {n_tot_removed_leaves})")
 
-
-
     else:
         print("No valid task selected.")
 

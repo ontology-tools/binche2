@@ -17,7 +17,10 @@ Want to include both 'chemical substance' and 'molecular entity' but remove 'ato
 """
 
 def get_descendants(ontology, root_iri):
-    """Recursively collect all descendants (subclasses) of a given class."""
+    """Recursively collect all descendants (subclasses) of a given class.
+    
+    Returns a set of IRI strings.
+    """
     descendants = set()
     to_visit = [root_iri] # Start with the root class
     while to_visit:
@@ -27,15 +30,19 @@ def get_descendants(ontology, root_iri):
         except Exception:
             continue
         for sub in subclasses:
-            if sub not in descendants:
-                descendants.add(sub)
-                to_visit.append(sub)
+            sub_iri = str(sub)  # Convert class object to IRI string
+            if sub_iri not in descendants:
+                descendants.add(sub_iri)
+                to_visit.append(sub_iri)
     return descendants
 
 
 def identify_structural_vs_functional(chebi_ontology):
-    """Classify classes as structural or functional based on ChEBI hierarchy."""
-    all_classes = set(chebi_ontology.get_classes())
+    """Classify classes as structural or functional based on ChEBI hierarchy.
+    
+    Returns sets of IRI strings.
+    """
+    all_classes = set(str(cls) for cls in chebi_ontology.get_classes())
     print(f"Total classes in ontology: {len(all_classes)}")
 
     # Identify functional hierarchies
@@ -74,8 +81,22 @@ def identify_structural_vs_functional(chebi_ontology):
     return structural_classes, functional_classes, unknown_classes
 
 
-def split_owl_by_type(structural_classes, functional_classes, unknown_classes, input_file):
-    """Write two new OWL files: one for structural and one for functional classes."""
+def split_owl_by_type(structural_classes, functional_classes, unknown_classes, input_file, output_dir=None):
+    """Write two new OWL files: one for structural and one for functional classes.
+    
+    Args:
+        structural_classes: Set of structural class IRIs
+        functional_classes: Set of functional class IRIs
+        unknown_classes: Set of unknown/unclassified class IRIs
+        input_file: Path to input OWL file
+        output_dir: Directory to save output files. If None, uses the directory of input_file
+    """
+    # If output_dir not provided, use the directory of input_file
+    if output_dir is None:
+        output_dir = os.path.dirname(input_file)
+        if not output_dir:
+            output_dir = "."
+    
     ns = {
         'owl': 'http://www.w3.org/2002/07/owl#',
         'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
@@ -107,9 +128,9 @@ def split_owl_by_type(structural_classes, functional_classes, unknown_classes, i
     
     base = os.path.basename(input_file)
     name, ext = os.path.splitext(base)
-    create_filtered_tree(structural_classes, f"data/{name}_structural{ext}")
-    create_filtered_tree(functional_classes, f"data/{name}_functional{ext}")
-    create_filtered_tree(unknown_classes, f"data/{name}_unknown{ext}")
+    create_filtered_tree(structural_classes, os.path.join(output_dir, f"{name}_structural{ext}"))
+    create_filtered_tree(functional_classes, os.path.join(output_dir, f"{name}_functional{ext}"))
+    create_filtered_tree(unknown_classes, os.path.join(output_dir, f"{name}_unknown{ext}"))
 
 def check_roots_of_unknown(unknown_classes, chebi_ontology):
     """For each unknown class, find its top-most ancestors (roots)

@@ -202,7 +202,7 @@ def find_leaf_classes_with_smiles_and_deprecated_old(chebi_ontology, smiles_prop
 
 #NEW
 ancestor_cache = {}
-def get_all_ancestors(cls, visited=None):
+def get_all_ancestors(chebi_ontology, cls, visited=None):
     """Recursively collect all ancestor classes, using cache to avoid recomputation."""
     cls_str = str(cls)
     if cls_str in ancestor_cache:
@@ -220,7 +220,7 @@ def get_all_ancestors(cls, visited=None):
             visited.add(parent_str)
             ancestors.append(parent_str)
             # Recursively get ancestors of this parent
-            ancestors.extend(get_all_ancestors(parent, visited))
+            ancestors.extend(get_all_ancestors(chebi_ontology, parent, visited))
 
     ancestors = list(set(ancestors))  # Remove duplicates
     ancestor_cache[cls_str] = ancestors  # Cache the result
@@ -326,7 +326,7 @@ def find_leaf_classes_with_smiles_and_deprecated(
     leaf_to_parents = {}
     i = 0
     for leaf in leaf_classes_with_smiles:
-        all_ancestors = get_all_ancestors(leaf)
+        all_ancestors = get_all_ancestors(chebi_ontology, leaf)
         leaf_to_parents[leaf] = all_ancestors
         i += 1
         if i % 1000 == 0:
@@ -399,10 +399,64 @@ def save_filtered_owl(chebi_file, classes_with_smiles_to_remove, deprecated_clas
     tree.write(output_file, encoding="utf-8", xml_declaration=True)
     print(f"✓ Done! Saved {output_file}")
 
-def save_leaf_classes_with_smiles(leaf_classes, chebi_ontology, smiles_property, output_file, structural_classes, functional_classes):
-    """Save leaf classes with SMILES to a CSV file."""
+
+def _build_smiles_map_from_owl(owl_file, smiles_property):
+    """OPTIMIZATION: Parse OWL XML directly to build SMILES map (much faster than ontology API)."""
+    smiles_map = {}
+    
+    ns = {
+        "owl": "http://www.w3.org/2002/07/owl#",
+        "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    }
+    
+    annotation_tag = f"{{{ns['owl']}}}AnnotationAssertion"
+    annotation_prop_tag = f"{{{ns['owl']}}}annotationProperty"
+    annotation_target_tag = f"{{{ns['owl']}}}annotationSubject"
+    annotation_value_tag = f"{{{ns['owl']}}}annotationValue"
+    rdf_resource = f"{{{ns['rdf']}}}resource"
+    
+    context = ET.iterparse(owl_file, events=("end",))
+    
+    for event, elem in context:
+        if elem.tag == annotation_tag:
+            prop_elem = elem.find(annotation_prop_tag)
+            if prop_elem is not None:
+                prop_resource = prop_elem.get(rdf_resource, "")
+                if smiles_property in prop_resource:
+                    target_elem = elem.find(annotation_target_tag)
+                    value_elem = elem.find(annotation_value_tag)
+                    if target_elem is not None and value_elem is not None:
+                        class_iri = target_elem.get(rdf_resource, "")
+                        smiles = value_elem.text
+                        if class_iri and smiles:
+                            smiles_map[class_iri] = smiles
+        elem.clear()
+    
+    return smiles_map
+
+
+def save_leaf_classes_with_smiles(leaf_classes, chebi_ontology, smiles_property, output_file, structural_classes, functional_classes, owl_file=None, parent_map_file=None):
+    """Save leaf classes with SMILES to a CSV file.
+    
+    OPTIMIZATION: If owl_file and parent_map_file are provided, uses fast lookups instead of slow ontology API.
+    """
 
     print(f"\nSaving {len(leaf_classes)} leaf classes with SMILES to {output_file}...")
+
+    # OPTIMIZATION: Load precomputed maps instead of using slow ontology API
+    smiles_map = {}
+    parent_map = {}
+    
+    if owl_file and os.path.exists(owl_file):
+        print("  Using fast OWL XML parsing for SMILES...")
+        smiles_map = _build_smiles_map_from_owl(owl_file, smiles_property)
+        print(f"  Loaded {len(smiles_map)} SMILES entries")
+    
+    if parent_map_file and os.path.exists(parent_map_file):
+        print("  Loading parent map from JSON...")
+        with open(parent_map_file, 'r') as f:
+            parent_map = json.load(f)
+        print(f"  Loaded {len(parent_map)} parent relationships")
 
     seen = set()
     rows = []
@@ -413,33 +467,37 @@ def save_leaf_classes_with_smiles(leaf_classes, chebi_ontology, smiles_property,
             continue  # Skip duplicates
         seen.add(cls)
 
-        axioms = chebi_ontology.get_axioms_for_iri(cls)
-        smiles = None
+        # Try OWL map first, fall back to ontology API
+        smiles = smiles_map.get(cls)
+        if smiles is None and chebi_ontology:
+            axioms = chebi_ontology.get_axioms_for_iri(cls)
+            for axiom in axioms:
+                component = axiom.component
+                if type(component).__name__ == 'AnnotationAssertion':
+                    ann = component.ann
+                    if hasattr(ann, 'ap'):
+                        prop_str = str(ann.ap)
+                        if prop_str == f"<{smiles_property}>":
+                            smiles = str(ann.av)
+                            break
 
-        for axiom in axioms:
-            component = axiom.component
-            if type(component).__name__ == 'AnnotationAssertion':
-                ann = component.ann
-                if hasattr(ann, 'ap'):
-                    prop_str = str(ann.ap)
-                    if prop_str == f"<{smiles_property}>":
-                        smiles = str(ann.av)  # Get the SMILES value
-                        break  # No need to check more axioms for this class
-
-        # Classficiation from parents
+        # Try parent map first, fall back to ontology API
         classification = "neither"
-        parents = set()
-        try: 
-            parents = chebi_ontology.get_superclasses(cls)
+        parents = set(parent_map.get(cls, []))
+        
+        if not parents and chebi_ontology:
+            try:
+                parents = set(str(p) for p in chebi_ontology.get_superclasses(cls))
+            except Exception as e:
+                print(f"⚠️ Could not get superclasses for {cls}: {e}")
+                classification = "unknown"
+                parents = set()
+        
+        if parents:
             if any(p in structural_classes for p in parents):
                 classification = "structural"
             elif any(p in functional_classes for p in parents):
                 classification = "functional"
-        except Exception as e:
-            print(f"⚠️ Could not get superclasses for {cls}: {e}")
-            classification = "unknown"
-            pass
-
 
         rows.append([cls, smiles, classification])
 
@@ -635,7 +693,7 @@ if __name__ == "__main__":
 
     if task == "remove_leaves_with_smiles": # Remove leaf classes with SMILES and deprecated classes from OWL 
                                             # (a new filtered OWL file will be saved)
-        filtered_output_file = "data/filtered_chebi_no_leaves_with_smiles_no_deprecated_newww.owl"
+        filtered_output_file = "data/filtered_chebi_no_leaves_with_smiles_no_deprecated.owl"
 
         chebi_file = "data/chebi.owl"
         subclass_map_file = "data/chebi_subclass_map.json" 
@@ -689,7 +747,6 @@ if __name__ == "__main__":
             output_file,
             structural_classes,
             functional_classes,
-
         )  
 
         df = pd.read_csv(output_file)

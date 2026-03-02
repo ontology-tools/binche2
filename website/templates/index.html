@@ -18,8 +18,8 @@
         <p>The input molecular entitites should either be in ChEBI ID format (e.g., CHEBI:16236) or as SMILES (eg. C2H6O). A mix of both is allowed.</p>
         <p>Example submission format:</p>
         <pre>
-CHEBI:77030     
-CHEBI:79036
+CHEBI:31463
+CHEBI:28426
         </pre>
 
         <p>Example submission format with weights (tab or space-separated):</p>
@@ -36,46 +36,16 @@ CHEBI:46816	0.7465
             <div class="form-check">
                 <input type="radio" name="smiles_option" value="use_parents" id="use_parents" checked class="form-check-input">
                 <label for="use_parents" class="form-check-label">Use the direct parents of any unmapped SMILES</label>
-                <button type="button" class="btn btn-sm ms-2" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="modal" data-bs-target="#unmappedSmilesModal">
+                <button type="button" class="btn btn-sm ms-2 info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Using Predicted Parents" data-bs-content="If your results show many nodes with weak enrichment using this option, try excluding unmapped SMILES instead.">
                     🛈
                 </button>
             </div>
             <div class="form-check">
                 <input type="radio" name="smiles_option" value="exclude" id="exclude_unmapped" class="form-check-input">
                 <label for="exclude_unmapped" class="form-check-label">Exclude any unmapped SMILES</label>
-                <button type="button" class="btn btn-sm ms-2" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="modal" data-bs-target="#excludeSmilesModal">
+                <button type="button" class="btn btn-sm ms-2 info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Excluding Unmapped SMILES" data-bs-content="Unmapped SMILES will be displayed in the results section. Consider manually searching the ChEBI database to identify appropriate IDs.">
                     🛈
                 </button>
-            </div>
-        </div>
-
-        <!-- Modal for Exclude SMILES Description -->
-        <div class="modal fade" id="excludeSmilesModal" tabindex="-1" aria-labelledby="excludeSmilesModalLabel" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="excludeSmilesModalLabel">Excluding Unmapped SMILES</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p>Unmapped SMILES will be displayed in the results section. Consider manually searching the <a href="https://www.ebi.ac.uk/chebi/" style="color: #0f808d; text-decoration: none;">ChEBI</a> database to identify appropriate IDs.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Modal for Unmapped SMILES Description -->
-        <div class="modal fade" id="unmappedSmilesModal" tabindex="-1" aria-labelledby="unmappedSmilesModalLabel" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="unmappedSmilesModalLabel">Using Predicted Parents</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p>If your results show many nodes with weak enrichment using this option, try excluding unmapped SMILES instead.</p>
-                    </div>
-                </div>
             </div>
         </div>
         
@@ -132,4 +102,22 @@ CHEBI:46816	0.7465
     </div>
     </div>
 </div>
+
+<style>
+    .info-button {
+        text-decoration: none;
+    }
+    .info-button:hover {
+        text-decoration: none;
+    }
+</style>
+
+<script>
+    // Initialize Bootstrap popovers
+    document.addEventListener('DOMContentLoaded', function() {
+        const popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+        const popoverList = popoverTriggerList.map(popoverTriggerEl => new bootstrap.Popover(popoverTriggerEl))
+    });
+</script>
+
 {% endblock %}

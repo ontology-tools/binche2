@@ -3,6 +3,7 @@ from pathlib import Path
 from load_chebi import load_chebi, load_ontology
 from pruning_smiles import (
     find_leaf_classes_with_smiles_and_deprecated,
+    save_filtered_owl,
     save_leaf_classes_with_smiles,
     build_parent_map,
     map_names_to_classes,
@@ -13,11 +14,9 @@ from prepare_role_calculations import (
     create_roles_to_all_leaves_map,
     create_class_to_all_roles_map,
 )
-from pruning_split_up_structure import identify_structural_vs_functional
+from pruning_split_up_structure import identify_structural_vs_functional, split_owl_by_type
 from pre_fishers_calculations import build_class_to_leaf_map
 import time
-
-start_time = time.time()
 
 """
 A script for creating all necessary files for the project.
@@ -102,15 +101,18 @@ if __name__ == "__main__":
     parent_map_json = "data_new/chebi_parent_map.json"
     roles_to_all_leaves_json = "data_new/roles_to_leaves_map.json" # output file for roles to all leaves map
     class_to_all_roles_json = "data_new/class_to_all_roles_map.json" # output file for class to all roles map
-    id_to_name_map_json = "data_new/chebi_id_to_name_map.json"
+    url_to_id_map_json = "data_new/chebi_url_to_id_map.json"
+
+    filtered_chebi_no_leaves_file = "data_new/filtered_chebi_no_leaves_with_smiles_no_deprecated.owl"
+    structural_ontology_file = "data_new/filtered_chebi_no_leaves_with_smiles_no_deprecated_structural.owl"
+    functional_ontology_file = "data_new/filtered_chebi_no_leaves_with_smiles_no_deprecated_functional.owl"
 
     leaf_to_ancestors_file = "data_new/removed_leaf_classes_to_ALL_parents_map.json"
     class_to_leaf_output_file = "data_new/class_to_leaf_descendants_map.json"
 
     ### Download and load the ChEBI ontology
     print("Downloading and loading ChEBI ontology...")
-    # Option: download directly to data_new/ to keep separate from old versions
-    chebi_ontology = load_chebi(download_dir="data_new")
+    chebi_ontology = load_chebi()
 
     ### Find and filter leaf classes with SMILES and deprecated classes, and save the filtered ontology
     print("Removing leaf classes with SMILES and deprecated classes...")
@@ -124,13 +126,16 @@ if __name__ == "__main__":
         removed_leaf_classes_file=removed_leaf_classes_file,
     )
 
+    # Comment out if you do not want to save the filtered OWL in a new file
+    save_filtered_owl(chebi_file, classes_with_smiles, deprecated_classes, filtered_chebi_no_leaves_file)
+
     ### Build map of all classes to their direct parents and save as JSON
     print("Building parent map...")
     build_parent_map(chebi_ontology, parent_map_json, deprecated_property)
 
-    ### Build map with CHEBI short IDs to names and save as JSON
-    print("Building ID to name map...")
-    map_names_to_classes(chebi_file, id_to_name_map_json)
+    ### Build map with CHEBI urls to short CHEBI IDs and save as JSON
+    print("Building URL to ID map...")
+    map_names_to_classes(chebi_ontology, url_to_id_map_json)
 
     ### Map all classes to their direct "has_role" connections and save as JSON,
     ### then create a map of all leaf classes to all their "has_role" connections (not just direct ones) and save as JSON
@@ -143,16 +148,29 @@ if __name__ == "__main__":
     ### Map each class to its direct roles, roles inherited from ancestor classes, and descendants of those roles in the role hierarchy.
     create_class_to_all_roles_map(roles_map_json, parent_map_json, class_to_all_roles_json)
 
-    ### Identify structural vs functional classes (in-memory, no OWL files needed)
-    print("Identifying structural vs functional classes...")
+    ### Split the filtered ontology into structural and functional classes and save as separate OWL files
+    print("Splitting ontology into structural and functional classes...")
     structural_classes, functional_classes, unknown_classes = identify_structural_vs_functional(chebi_ontology)
-    
-    print(f"Identified {len(structural_classes)} structural classes")
-    print(f"Identified {len(functional_classes)} functional classes")
-    print(f"Identified {len(unknown_classes)} unknown classes")
+    split_owl_by_type(structural_classes, functional_classes, unknown_classes, filtered_chebi_no_leaves_file)
 
-    ### Save a CSV file with the removed leaf classes (using in-memory class sets)
+    ### Save a CSV file with the removed leaf classes 
     print("Saving CSV with removed leaf classes...")
+    structural_ontology = load_ontology(structural_ontology_file)
+    functional_ontology = load_ontology(functional_ontology_file)
+
+    # Extract sets of class IRIs for quick membership checking
+    structural_classes = set(structural_ontology.get_classes())
+    functional_classes = set(functional_ontology.get_classes())
+
+    classes_with_smiles, _ = find_leaf_classes_with_smiles_and_deprecated(
+        chebi_ontology,
+        smiles_property,
+        deprecated_property,
+        subclass_map_file,
+        leaf_parents_map_file,
+    )
+
+    # Save CSV with classification
     save_leaf_classes_with_smiles(
         classes_with_smiles,
         chebi_ontology,
@@ -160,8 +178,6 @@ if __name__ == "__main__":
         removed_leaf_classes_file,
         structural_classes,
         functional_classes,
-        owl_file=chebi_file,  # OPTIMIZATION: Pass OWL file for fast XML parsing of SMILES
-        parent_map_file=parent_map_json,  # OPTIMIZATION: Use already-created parent map instead of ontology API
     )  
 
     ### Build a JSON map from each class IRI to ALL its leaf descendants
