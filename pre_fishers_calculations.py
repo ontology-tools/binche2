@@ -11,9 +11,15 @@ import os
 import pandas as pd
 import time
 import json
+import logging
 from collections import defaultdict
 from tqdm import tqdm
 from collections import deque
+
+logger = logging.getLogger(__name__)
+_MISSING_ROLE_WARNING_LIMIT = 5
+_missing_role_warning_count = 0
+_missing_role_warning_suppressed = 0
 
 def count_removed_leaves(removed_classes_csv):
     classification = 'structural' # Since 'functional' are errors in CHEBI ontology

@@ -9,10 +9,8 @@ Reference: Stojmirovic & Yu (2010), ArXiv:1004.5088
 """
 
 import json
-import logging
 import math
 import time
-from collections import Counter
 import numpy as np
 import pandas as pd
 from scipy.special import ndtr
@@ -43,116 +41,41 @@ from multiple_test_corrections import (
 
 
 # ---------------------------------------------------------------------------
-# Saddlepoint engine  (main code translated from saddlesum.c, public domain code by Stojmirovic)
-
-# A. Stojmirovic and Y.-K. Yu. Robust and accurate data enrichment statistics via distribution function of sum of weights. _Bioinformatics_, **26** (21):2752-2759, 2010.
+# Saddlepoint engine  (translated directly from saddlesum.c)
 # ---------------------------------------------------------------------------
 
-logger = logging.getLogger(__name__)
-
 class _SaddleSum:
-    """
-    Precomputes background distribution, answers pvalue queries via
-    the Lugannani-Rice saddlepoint approximation.
-    """
     MAX_ITERS = 50
     TOLERANCE = 1.0e-11
-    MAX_WARNING_EXAMPLES_PER_REASON = 5
 
     def __init__(self, background_weights):
         w = np.asarray(background_weights, dtype=float)
-        self._N = len(w)                   # total number of leaves in background
-        self._mean = float(w.mean())       # mean over ALL weights including zeros
-        self._wmax = float(w.max())        # max over ALL weights
+        self._weights = np.sort(w)
+        self._N = len(w)
+        self._mean = float(w.mean())
+        self._wmax = float(self._weights[-1])
         self._cache = []
-        self._fallback_counts = Counter()  # Track numerical fallback reasons
-
-        # Split into measured (non-zero) and unmeasured (zero) — after computing
-        # mean and wmax which must reflect the full background population
-        w_sorted = np.sort(w)
-        nonzero_mask = w_sorted != 0.0
-        self._weights = w_sorted[nonzero_mask]         # sorted non-zero weights only
-        self._n_zeros = int((~nonzero_mask).sum())     # count of zero-weight leaves
-
-    def _debug_weight_summary(self): # For logging numerical fallback contexts. Addition.
-        if self._weights.size == 0:
-            return {
-                "N": self._N,
-                "nonzero_count": 0,
-                "zero_count": self._n_zeros,
-                "mean_all": self._mean,
-                "wmax": self._wmax,
-            }
-
-        return {
-            "N": self._N,
-            "nonzero_count": int(self._weights.size),
-            "zero_count": self._n_zeros,
-            "mean_all": self._mean,
-            "wmax": self._wmax,
-            "nonzero_min": float(self._weights[0]),
-            "nonzero_max": float(self._weights[-1]),
-            "nonzero_mean": float(np.mean(self._weights)),
-            "nonzero_std": float(np.std(self._weights)),
-        }
-
-    def _log_numerical_fallback(self, reason, score, num_hits, lambda_value=None, extra=None):
-        self._fallback_counts[reason] += 1
-        occurrence = self._fallback_counts[reason]
-
-        payload = {
-            "reason": reason,
-            "score": float(score),
-            "num_hits": int(num_hits),
-            "x": float(score / num_hits) if num_hits else None,
-            "lambda": float(lambda_value) if lambda_value is not None else None,
-            "occurrence": occurrence,
-            "background": self._debug_weight_summary(),
-        }
-        if extra is not None:
-            payload["extra"] = extra
-        if occurrence <= self.MAX_WARNING_EXAMPLES_PER_REASON:
-            logger.warning("Weighted SaddleSum numerical fallback: %s", payload)
-        elif occurrence == self.MAX_WARNING_EXAMPLES_PER_REASON + 1:
-            logger.warning(
-                "Weighted SaddleSum numerical fallback: further '%s' messages suppressed after %d examples",
-                reason,
-                self.MAX_WARNING_EXAMPLES_PER_REASON,
-            )
-
-    def log_fallback_summary(self):
-        if not self._fallback_counts:
-            return
-        logger.warning(
-            "Weighted SaddleSum numerical fallback summary (counts by reason): %s",
-            dict(self._fallback_counts),
-        )
 
     def _compute_item(self, lmbd):
         w = self._weights
-        tmp = np.exp(lmbd * (w - self._wmax)) # Shift by wmax for numerical stability (largest term becomes exp(0)=1, others <= 1)
+        tmp = np.exp(lmbd * (w - self._wmax))
         Nrho  = tmp.sum()
         Nrho1 = (tmp * w).sum()
         Nrho2 = (tmp * w * w).sum()
 
-        # Add contribution of all zero-weight leaves as a single term
-        # Each contributes exp(lmbd * (0 - wmax)) to Nrho, and 0 to Nrho1/Nrho2
-        zero_contribution = self._n_zeros * math.exp(lmbd * (-self._wmax))
-        Nrho += zero_contribution
-        # Nrho1 and Nrho2 unchanged — zero weights contribute 0 * anything = 0
-
-        if Nrho <= 0.0: 
+        if Nrho <= 0.0:
             return None
 
-        D1K = Nrho1 / Nrho # The mean of the tilted distribution, i.e. the saddlepoint mean at lambda=lmbd. First derivative of the cumulant generating function K'(lambda).
-        D2K = Nrho2 / Nrho - D1K ** 2 # The variance of the tilted distribution, i.e. the second derivative of the cumulant generating function K''(lambda). Must be positive for a valid saddlepoint approximation.
+        D1K = Nrho1 / Nrho
+        D2K = Nrho2 / Nrho - D1K ** 2
+
         if D2K <= 0.0:
             return None
 
-        expH = Nrho * np.exp(lmbd * (self._wmax - D1K)) / self._N # The main exponential term in the Lugannani-Rice formula
+        expH = Nrho * np.exp(lmbd * (self._wmax - D1K)) / self._N
         C = 2.0 * lmbd * math.sqrt(D2K)
 
-        inner = lmbd * (D1K - self._wmax) - math.log(Nrho) + math.log(self._N) # The argument inside the square root for D — must be non-negative for a valid saddlepoint approximation. 
+        inner = lmbd * (D1K - self._wmax) - math.log(Nrho) + math.log(self._N)
         if inner < 0.0:
             return None
 
@@ -164,12 +87,14 @@ class _SaddleSum:
         sqrtm = math.sqrt(m)
         if item['D'] * sqrtm > -1.0:
             return 1.0
+        # Guard against C or D being zero (divide by zero)
         if item['C'] == 0.0 or item['D'] == 0.0:
             return 1.0
         phi = math.sqrt(2.0 / math.pi) * (item['expH'] ** m)
         result = (float(ndtr(item['D'] * sqrtm))
                   + phi / item['C'] / sqrtm
                   + phi / item['D'] / sqrtm / 2.0)
+        # Guard against nan/inf from numerical edge cases
         if not math.isfinite(result):
             return 1.0
         return result
@@ -187,39 +112,14 @@ class _SaddleSum:
     def _insert(self, item):
         self._cache.insert(self._bisect(item['mean']), item)
 
-    def _exact_singleton_right_tail(self, score): # Addition. To handle the num_hits=1 case exactly, since the saddlepoint approximation is not accurate for small m.
-        """
-        Exact right-tail p-value for num_hits == 1:
-        P(W >= score) under the empirical background distribution.
-        """
-        nonzero_ge = int(self._weights.size - np.searchsorted(self._weights, score, side='left'))
-        if score <= 0.0:
-            count_ge = nonzero_ge + self._n_zeros
-        else:
-            count_ge = nonzero_ge
-
-        p = count_ge / self._N
-        min_pval = 1.0 / self._N
-        return min(max(p, min_pval), 1.0)
-
     def pvalue(self, score, num_hits):
-        """
-        Right-tail p-value for observing sum=score across num_hits members.
-
-        No cutoff_pvalue argument — we compute the full p-value for every
-        term and let BH correction decide significance, exactly as the
-        Fisher pipeline does.
-        """
-        if num_hits == 1:
-            return self._exact_singleton_right_tail(score)
-
         x = score / num_hits
         if x <= self._mean:
             return 1.0
 
-        min_pval = (1.0 / self._N) ** num_hits # Minimum possible p-value if all hits had the maximum weight (wmax), which is the most extreme case. 
+        min_pval = (1.0 / self._N) ** num_hits
         i = self._bisect(x)
-        ya = self._cache[i - 1]['lambda_'] if i > 0 else 0.0
+        ya = self._cache[i - 1]['lambda_'] if i > 0 else 0.0 
 
         if i < len(self._cache):
             item = self._cache[i]
@@ -233,49 +133,29 @@ class _SaddleSum:
             while True:
                 yb *= 2.0
                 if yb > 1e6:
-                    self._log_numerical_fallback(
-                        reason="lambda_upper_bound_reached",
-                        score=score,
-                        num_hits=num_hits,
-                        lambda_value=yb,
-                    )
                     return min_pval
                 item = self._compute_item(yb)
                 if item is None:
-                    self._log_numerical_fallback(
-                        reason="invalid_item_during_bracketing",
-                        score=score,
-                        num_hits=num_hits,
-                        lambda_value=yb,
-                    )
                     return min_pval
                 self._insert(item)
                 if abs(item['mean'] - self._wmax) < self.TOLERANCE:
                     break
             yc = 0.5 * (ya + yb)
 
-        # Newton's method with bisection fallback
         pval = 1.0
         for _ in range(self.MAX_ITERS):
             item = self._compute_item(yc)
             if item is None:
-                self._log_numerical_fallback(
-                    reason="invalid_item_during_newton_bisection",
-                    score=score,
-                    num_hits=num_hits,
-                    lambda_value=yc,
-                    extra={"ya": ya, "yb": yb},
-                )
                 break
             pval = self._item_pvalue(item, num_hits)
-            diff = item['mean'] - x # trying to drive this to zero — if it is, then we are at the saddlepoint lambda that gives the desired mean, and thus the correct p-value.
-            if diff < 0.0: 
+            diff = item['mean'] - x
+            if diff < 0.0:
                 ya = yc
             else:
                 yb = yc
-            y = yc - diff / item['D2K'] 
+            y = yc - diff / item['D2K']
             if y < ya or y > yb:
-                y = 0.5 * (ya + yb) # Bisection fallback if Newton step goes out of bounds
+                y = 0.5 * (ya + yb)
             if abs(y - yc) < self.TOLERANCE or abs(diff) < self.TOLERANCE:
                 break
             self._insert(item)
@@ -311,12 +191,11 @@ def _propagate_weights_to_leaves(weights_dict, class_to_leaf_map, removed_leaves
 
     weights_with_leaves = {}
 
-    # First pass: propagate non-leaf weights to descendants (take maximum if conflict)
+    # First pass: propagate non-leaf weights to descendants
     for cls, weight in weights_dict.items():
         if cls not in leaf_set:
             for leaf in class_to_leaf_map.get(cls, []):
-                current = weights_with_leaves.get(leaf)
-                if current is None or weight > current:
+                if leaf not in weights_with_leaves:
                     weights_with_leaves[leaf] = weight
 
     # Second pass: directly submitted leaves always overwrite inherited values
@@ -339,38 +218,6 @@ def _build_background_weights(weights_with_leaves, removed_leaves_csv):
     leaves_df = pd.read_csv(removed_leaves_csv)
     all_bg_leaves = list(leaves_df['IRI'].values)
     return [weights_with_leaves.get(leaf, 0.0) for leaf in all_bg_leaves]
-
-
-# ---------------------------------------------------------------------------
-# Diagnostics
-# ---------------------------------------------------------------------------
-
-def _print_non_finite_pvalue_diagnostics(enrichment_results, stage):
-    """
-    Check for non-finite p-values (inf, -inf, nan) and print diagnostics.
-    This is a diagnostic tool to track when p-value computation fails.
-    """
-    non_finite_classes = {}
-    for cls, vals in enrichment_results.items():
-        p_value = vals.get("p_value")
-        if not math.isfinite(p_value):
-            non_finite_classes[cls] = {
-                "p_value": p_value,
-                "score": vals.get("score"),
-                "n_ss_annotated": vals.get("n_ss_annotated"),
-                "class_name": vals.get("class"),
-            }
-    
-    if non_finite_classes:
-        logger.warning(
-            "Non-finite p-values detected at stage '%s': %d classes",
-            stage,
-            len(non_finite_classes),
-        )
-        for cls, info in list(non_finite_classes.items())[:5]:  # Log first 5 examples
-            logger.debug("  Class %s: %s", cls, info)
-        if len(non_finite_classes) > 5:
-            logger.debug("  ... and %d more", len(non_finite_classes) - 5)
 
 
 # ---------------------------------------------------------------------------
@@ -426,29 +273,14 @@ def get_weighted_enrichment_values(
 
     if classification in ["structural", "full"]:
         for cls in studyset_ancestors:
-            if cls in studyset_leaves_set:
-                continue
-
             term_leaves = set(class_to_leaf_map.get(cls, []))
-
-            # Calculate p-value if leaves exist; otherwise use safe defaults
-            if term_leaves:
-                score, n_ss_annotated, p_value = calculate_weighted_p_value(
-                    saddler, term_leaves, studyset_leaves_set, weights_with_leaves
-                )
-            else:
-                score, n_ss_annotated, p_value = 0.0, 0, 1.0
-
-            # Background annotation count: use mapped counts when available,
-            # otherwise fall back to the computed leaf set size.
-            if cls in class_to_leaf_map:
-                _, n_bg_annotated = count_removed_classes_for_class(
-                    cls, class_to_leaf_map, classification,
-                    class_to_all_roles_map, roles_to_leaves_map,
-                )
-            else:
-                n_bg_annotated = len(term_leaves)
-
+            score, n_ss_annotated, p_value = calculate_weighted_p_value(
+                saddler, term_leaves, studyset_leaves_set, weights_with_leaves
+            )
+            _, n_bg_annotated = count_removed_classes_for_class(
+                cls, class_to_leaf_map, classification,
+                class_to_all_roles_map, roles_to_leaves_map,
+            )
             results[cls] = {
                 "class": id_to_name(cls),
                 "score": score,
@@ -481,21 +313,7 @@ def get_weighted_enrichment_values(
                 "p_value": p_value,
             }
 
-    saddler.log_fallback_summary()
-
     return results
-
-
-def _split_graph_nodes_for_enrichment(graph_nodes, role_nodes):
-    """
-    Split graph nodes into structural and role nodes for enrichment.
-    """
-    graph_nodes_set = set(graph_nodes)
-    role_nodes_set = set(role_nodes)
-    structural_nodes = [node for node in graph_nodes_set if node not in role_nodes_set]
-    role_nodes_in_graph = [node for node in graph_nodes_set if node in role_nodes_set]
-    return structural_nodes, role_nodes_in_graph
-
 
 
 # ---------------------------------------------------------------------------
@@ -612,21 +430,10 @@ def run_weighted_enrichment_analysis(
             pruned_G, removed_nodes = linear_branch_collapser_pruner_remove_less(pruned_G, n)
             all_removed_nodes.update(removed_nodes)
 
-        structural_nodes_for_enrichment, role_nodes_for_enrichment = _split_graph_nodes_for_enrichment(
-            pruned_G.nodes(), studyset_ancestors_roles
-        )
-        studyset_ancestors = structural_nodes_for_enrichment
-        studyset_ancestors_roles_for_enrichment = role_nodes_for_enrichment
-        print(f"Structural nodes for enrichment (from graph): {len(studyset_ancestors)}")
-        print(f"Role nodes for enrichment (from graph): {len(studyset_ancestors_roles_for_enrichment)}")
+        studyset_ancestors = [c for c in studyset_ancestors_all if c not in all_removed_nodes]
+        print(f"Ancestors after pre-enrichment pruning: {len(studyset_ancestors)}")
     else:
-        structural_nodes_for_enrichment, role_nodes_for_enrichment = _split_graph_nodes_for_enrichment(
-            pruned_G.nodes(), studyset_ancestors_roles
-        )
-        studyset_ancestors = structural_nodes_for_enrichment
-        studyset_ancestors_roles_for_enrichment = role_nodes_for_enrichment
-        print(f"Structural nodes for enrichment (from graph): {len(studyset_ancestors)}")
-        print(f"Role nodes for enrichment (from graph): {len(studyset_ancestors_roles_for_enrichment)}")
+        studyset_ancestors = studyset_ancestors_all
 
     enrichment_results = get_weighted_enrichment_values(
         removed_leaves_csv,
@@ -636,19 +443,16 @@ def run_weighted_enrichment_analysis(
         class_to_leaf_map,
         class_to_all_roles_map,
         roles_to_leaves_map,
-        studyset_ancestors_roles_for_enrichment,
+        studyset_ancestors_roles,
         weights_with_leaves,
     )
-    _print_non_finite_pvalue_diagnostics(enrichment_results, "post-raw-enrichment")
 
     if bonferroni_correct:
         print("Applying Bonferroni correction...")
         enrichment_results, _ = bonferroni_correction(enrichment_results)
-        _print_non_finite_pvalue_diagnostics(enrichment_results, "post-bonferroni")
     elif benjamini_hochberg_correct:
         print("Applying Benjamini-Hochberg FDR correction...")
         enrichment_results = benjamini_hochberg_fdr_correction(enrichment_results)
-        _print_non_finite_pvalue_diagnostics(enrichment_results, "post-bh")
 
     if high_p_value_prune:
         print(f"High p-value pruner, threshold={p_value_threshold}")
@@ -673,7 +477,6 @@ def run_weighted_enrichment_analysis(
     print("Final weighted enrichment results:")
     print_enrichment_results(enrichment_results)
     print(f"Total removed nodes: {len(all_removed_nodes)}")
-    _print_non_finite_pvalue_diagnostics(enrichment_results, "final-post-pruning")
 
     results = {
         "study_set": [id_to_name(c) for c in studyset_leaves],
@@ -682,7 +485,6 @@ def run_weighted_enrichment_analysis(
             id_to_name(cls): vals for cls, vals in enrichment_results.items()
         },
     }
-
     return results, pruned_G
 
 
@@ -722,27 +524,15 @@ def run_weighted_enrichment_analysis_plain_enrich_pruning_strategy(
 
     all_removed_nodes = set()
 
-    G = create_graph_with_roles_and_structures(
-        studyset_leaves, studyset_ancestors,
-        studyset_ancestors_roles, parent_map_file,
-        class_to_all_roles_map, classification,
-    )
-
-    structural_nodes_for_enrichment, role_nodes_for_enrichment = _split_graph_nodes_for_enrichment(
-        G.nodes(), studyset_ancestors_roles
-    )
-    print(f"Structural nodes for enrichment (from graph): {len(structural_nodes_for_enrichment)}")
-    print(f"Role nodes for enrichment (from graph): {len(role_nodes_for_enrichment)}")
-
     enrichment_results = get_weighted_enrichment_values(
         removed_leaves_csv,
         classification,
         studyset_leaves,
-        structural_nodes_for_enrichment,
+        studyset_ancestors,
         class_to_leaf_map,
         class_to_all_roles_map,
         roles_to_leaves_map,
-        role_nodes_for_enrichment,
+        studyset_ancestors_roles,
         weights_with_leaves,
     )
 
@@ -752,6 +542,12 @@ def run_weighted_enrichment_analysis_plain_enrich_pruning_strategy(
     enrichment_results = benjamini_hochberg_fdr_correction(enrichment_results)
     print("After BH correction:")
     print_enrichment_results(enrichment_results)
+
+    G = create_graph_with_roles_and_structures(
+        studyset_leaves, studyset_ancestors,
+        studyset_ancestors_roles, parent_map_file,
+        class_to_all_roles_map, classification,
+    )
 
     print("Starting pre-loop pruning phase.")
     G, removed_nodes = high_p_value_branch_pruner(G, enrichment_results, p_value_threshold)
@@ -805,5 +601,4 @@ def run_weighted_enrichment_analysis_plain_enrich_pruning_strategy(
             id_to_name(cls): vals for cls, vals in current_enrichment.items()
         },
     }
-
     return results, G

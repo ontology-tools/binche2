@@ -8,6 +8,7 @@ from tqdm import tqdm
 from math import inf
 import json
 import time
+from collections import Counter
 from networkx.readwrite import json_graph
 
 def id_to_name(class_id):
@@ -525,6 +526,8 @@ def graph_to_cytospace_json(G, output_file, enrichment_results=None):
 
     # Extract the nested enrichment results
     enr_dict = enrichment_results.get('enrichment_results') if enrichment_results else None
+    study_set_labels = set(enrichment_results.get('study_set', [])) if enrichment_results else set()
+    missing_pvalue_nodes = []
 
     # Nodes
     for node, attrs in G.nodes(data=True):
@@ -542,6 +545,16 @@ def graph_to_cytospace_json(G, output_file, enrichment_results=None):
             enr = enr_dict[label]
             node_data["p_value"] = enr.get("p_value")
             node_data["p_value_corrected"] = enr.get("p_value_corrected")
+            node_data["p_value_reason"] = "present"
+        else:
+            if not enr_dict:
+                reason = "no_enrichment_results_dict"
+            elif label in study_set_labels:
+                reason = "study_set_leaf_not_tested"
+            else:
+                reason = "node_not_in_enrichment_results"
+            node_data["p_value_reason"] = reason
+            missing_pvalue_nodes.append((label, reason))
 
         data["elements"].append({"data": node_data})
     
@@ -566,6 +579,18 @@ def graph_to_cytospace_json(G, output_file, enrichment_results=None):
                 "target": target
             }
         })
+
+    if missing_pvalue_nodes:
+        total_nodes = G.number_of_nodes()
+        missing_count = len(missing_pvalue_nodes)
+        reason_counts = Counter(reason for _, reason in missing_pvalue_nodes)
+        print(
+            f"Graph p-value coverage: {total_nodes - missing_count}/{total_nodes} nodes with p-values; "
+            f"{missing_count} nodes with N/A"
+        )
+        print(f"Graph N/A reasons: {dict(reason_counts)}")
+        for label, reason in missing_pvalue_nodes[:15]:
+            print(f"Graph N/A node: {label} | reason={reason}")
 
     with open(output_file, "w") as f:
         json.dump(data, f, indent=4)

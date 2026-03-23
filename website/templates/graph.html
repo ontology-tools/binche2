@@ -167,7 +167,7 @@
             // Determine max exponent from data
             var maxExponent = 0;
             cy.nodes().forEach(node => {
-                const p = node.data('p_value_corrected') || node.data('p_value'); // Use corrected p-value if available, else raw p-value
+                const p = node.data('p_value_corrected') ?? node.data('p_value'); // Use corrected p-value if available, else raw p-value
                 if (p != null && p > 0) {
                     const exponent = -Math.log10(p);
                     if (exponent > maxExponent) {
@@ -221,7 +221,7 @@
         const colorHigh = "#ffffff";  
 
         cy.nodes().forEach(node => {
-            const p = node.data('p_value_corrected') || node.data('p_value'); // Use corrected p-value if available, else raw p-value
+            const p = node.data('p_value_corrected') ?? node.data('p_value'); // Use corrected p-value if available, else raw p-value
 
             let color = "lightgrey"; // default color
 

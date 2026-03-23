@@ -38,7 +38,7 @@ If you manually choose which pruning strategies to apply, they will be implement
 
 ### Calculations
 
-To perform enrichment analysis calculations, Fisher's exact test is used for P-value calculations. For weighted enrichment analysis however, a SaddleSum method is used. 
+To perform enrichment analysis calculations, Fisher's exact test is used for P-value calculations. For weighted enrichment analysis however, a SaddleSum method is used. All weights must be real and positive numbers.
 
 ### The Graph
 

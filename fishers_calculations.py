@@ -43,7 +43,8 @@ def calculate_p_value(n_ss_annotated, n_ss_leaves, n_bg_annotated, n_bg_leaves):
     c = n_bg_annotated - n_ss_annotated
     d = n_bg_leaves - n_bg_annotated - b
     odds, p = fisher_exact([[a, b], [c, d]], alternative='greater')
-    # ‘greater’: thget_ne odds ratio of the underlying population is greater than one
+    # odds, p = fisher_exact([[a, b], [c, d]], alternative='two-sided') 
+    # ‘greater’: odds ratio of the underlying population is greater than one
     return odds, p
 
 def normalize_id(raw_id: str) -> str:
