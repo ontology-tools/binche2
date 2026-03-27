@@ -215,6 +215,23 @@ def run_analysis():
     if classification:
         session['classification'] = classification
     
+    # Keep the correction selection stable across re-runs.
+    previous_correction = session.get('correction_method', {
+        'bonferroni_correct': False,
+        'benjamini_hochberg_correct': False
+    })
+    method = request.form.get("p_value_correction_method")
+    if method:
+        bonferroni_correct, benjamini_hochberg_correct = map_p_value_correction_method(method)
+    else:
+        bonferroni_correct = previous_correction.get('bonferroni_correct', False)
+        benjamini_hochberg_correct = previous_correction.get('benjamini_hochberg_correct', False)
+
+    session['correction_method'] = {
+        'bonferroni_correct': bonferroni_correct,
+        'benjamini_hochberg_correct': benjamini_hochberg_correct
+    }
+
     looping_prune_method = request.form.get('looping_prune_method')
     if looping_prune_method == 'no_loop_prune':
         # User chose no looping pruning, proceed to other pruning options
@@ -239,10 +256,6 @@ def run_analysis():
         session['unresolved_smiles'] = unresolved_smiles
 
         return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'))
-
-    # P-VALUE CORRECTION METHOD
-    method = request.form.get("p_value_correction_method")
-    bonferroni_correct, benjamini_hochberg_correct = map_p_value_correction_method(method)
 
     # PRUNING OPTIONS
     root_children_prune = request.form.get('root_children_prune') == 'true'
@@ -293,11 +306,6 @@ def run_analysis():
         'high_p_value_prune': high_p_value_prune,
         'p_value_threshold': p_value_threshold,
         'zero_degree_prune': zero_degree_prune
-    }
-
-    session['correction_method'] = {
-        'bonferroni_correct': bonferroni_correct,
-        'benjamini_hochberg_correct': benjamini_hochberg_correct
     }
 
     session['unresolved_smiles'] = unresolved_smiles
