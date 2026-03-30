@@ -5,202 +5,11 @@ import os
 import csv
 import pandas as pd
 import json
+import time
 from collections import defaultdict
 
 """This script filters the ontology to remove classes that have SMILES and that are leaves"""
 
-# def find_leaf_classes_with_smiles_and_deprecated(chebi_ontology, smiles_property, deprecated_property, subclass_map_file):
-
-#     print("\nFinding leaf classes with SMILES...")
-
-#     # Load or build subclass mapping for faster lookup
-#     try:
-#         with open(subclass_map_file, 'r') as f:
-#             subclass_map = json.load(f)
-#         print(f"Loaded subclass mapping from {subclass_map_file} with {len(subclass_map)} entries.")
-#     except FileNotFoundError:
-#         print("Building subclass mapping (may take a while)...")
-#         subclass_map = defaultdict(list)
-#         for idx, cls in enumerate(chebi_ontology.get_classes()):
-#             subclasses = chebi_ontology.get_subclasses(cls)
-#             if subclasses:
-#                 subclass_map[str(cls)] = [str(sub) for sub in subclasses]
-#             if (idx + 1) % 10000 == 0:
-#                 print(f"Processed {idx + 1} classes for subclass mapping...")
-#         with open(subclass_map_file, 'w') as f:
-#             json.dump(subclass_map, f)
-#         print(f"Saved subclass mapping to {subclass_map_file}.")
-
-#     # Get all classes
-#     all_classes = chebi_ontology.get_classes()
-#     print(f"Total classes: {len(all_classes)}")
-
-#     # Precompute property strings
-#     smiles_prop_str = f"<{smiles_property}>"
-#     deprecated_prop_str = f"<{deprecated_property}>"
-
-#     # Find classes with SMILES
-#     classes_with_smiles = []
-#     leaf_classes_with_smiles = []
-#     deprecated_classes = []
-
-#     # Counters
-#     i = 0
-#     j = 0
-#     k = 0
-
-
-#     for cls in all_classes:
-#         axioms = chebi_ontology.get_axioms_for_iri(cls) # Get all axioms for the class
-#         cls_str = str(cls)
-#         is_deprecated = False
-#         has_smiles = False
-
-#         for axiom in axioms: 
-#             component = axiom.component # The component of the axiom can eg be SubClassOf, AnnotationAssertion, etc.
-#             if type(component).__name__ == 'AnnotationAssertion': # Check if axiom is an annotation, e.g. a SMILES or deprecated tag
-#                 ann = component.ann # Get the annotation
-#                 if hasattr(ann, 'ap'): # Check if annotation has an annotation property (ap). This can eg tell us if it is a SMILES string
-#                     prop_str = str(ann.ap) # Converts property IRI to string for easier comparison
-                    
-#                     if prop_str == deprecated_prop_str: # Check if deprecated
-#                         is_deprecated = True
-#                         k += 1
-#                         if k % 10000 == 0:
-#                             print(f"Found {k} deprecated classes so far...")
-                    
-#                     if prop_str == smiles_prop_str: # Check if SMILES property
-#                         has_smiles = True
-#                         i += 1
-#                         if i % 10000 == 0:
-#                             print(f"Found {i} classes with SMILES so far...")
-        
-
-#         # Add to correct lists
-#         if is_deprecated:
-#             deprecated_classes.append(cls_str)
-#             continue  # Skip further checks for deprecated classes
-#         if has_smiles:
-#             classes_with_smiles.append(cls_str)
-#             if cls_str not in subclass_map or len(subclass_map[cls_str]) == 0: #  # Check if leaf class (no subclasses)
-
-#                 leaf_classes_with_smiles.append(cls_str)    
-#                 j += 1
-#                 if j % 10000 == 0:
-#                     print(f"Found {j} leaf classes with SMILES so far...")
-                
-    
-#     # Summary
-#     print(f"\nDeprecated classes: {len(deprecated_classes)}")
-#     print(f"Classes WITH SMILES: {len(classes_with_smiles)}")
-#     print(f"Leaf classes with SMILES: {len(leaf_classes_with_smiles)}")
-
-#     return set(leaf_classes_with_smiles), set(deprecated_classes), all_classes
-
-"""
-def find_leaf_classes_with_smiles_and_deprecated_old(chebi_ontology, smiles_property, deprecated_property, subclass_map_file, leaf_parents_map_file):
-
-    print("\nFinding leaf classes with SMILES...")
-
-    # Load or build subclass mapping for faster lookup
-    try:
-        with open(subclass_map_file, 'r') as f:
-            subclass
-            _map = json.load(f)
-        print(f"Loaded subclass mapping from {subclass_map_file} with {len(subclass_map)} entries.")
-    except FileNotFoundError:
-        print("Building subclass mapping (may take a while)...")
-        subclass_map = defaultdict(list)
-        for idx, cls in enumerate(chebi_ontology.get_classes()):
-            subclasses = chebi_ontology.get_subclasses(cls)
-            if subclasses:
-                subclass_map[str(cls)] = [str(sub) for sub in subclasses]
-            if (idx + 1) % 10000 == 0:
-                print(f"Processed {idx + 1} classes for subclass mapping...")
-        with open(subclass_map_file, 'w') as f:
-            json.dump(subclass_map, f)
-        print(f"Saved subclass mapping to {subclass_map_file}.")
-
-    # Get all classes
-    all_classes = chebi_ontology.get_classes()
-    print(f"Total classes: {len(all_classes)}")
-
-    # Precompute property strings
-    smiles_prop_str = f"<{smiles_property}>"
-    deprecated_prop_str = f"<{deprecated_property}>"
-
-    # Find classes with SMILES
-    classes_with_smiles = []
-    leaf_classes_with_smiles = []
-    deprecated_classes = []
-
-    leaf_to_parents = {}
-
-    # Counters
-    i = 0
-    j = 0
-    k = 0
-
-
-    for cls in all_classes:
-        axioms = chebi_ontology.get_axioms_for_iri(cls) # Get all axioms for the class
-        cls_str = str(cls)
-        is_deprecated = False
-        has_smiles = False
-
-        for axiom in axioms: 
-            component = axiom.component # The component of the axiom can eg be SubClassOf, AnnotationAssertion, etc.
-            if type(component).__name__ == 'AnnotationAssertion': # Check if axiom is an annotation, e.g. a SMILES or deprecated tag
-                ann = component.ann # Get the annotation
-                if hasattr(ann, 'ap'): # Check if annotation has an annotation property (ap). This can eg tell us if it is a SMILES string
-                    prop_str = str(ann.ap) # Converts property IRI to string for easier comparison
-                    
-                    if prop_str == deprecated_prop_str: # Check if deprecated
-                        is_deprecated = True
-                        k += 1
-                        if k % 1000 == 0:
-                            print(f"Found {k} deprecated classes so far...")
-                    
-                    if prop_str == smiles_prop_str: # Check if SMILES property
-                        has_smiles = True
-                        i += 1
-                        if i % 1000 == 0:
-                            print(f"Found {i} classes with SMILES so far...")
-        
-
-        # Add to correct lists
-        if is_deprecated:
-            deprecated_classes.append(cls_str)
-            continue  # Skip further checks for deprecated classes
-        if has_smiles:
-            classes_with_smiles.append(cls_str)
-            if cls_str not in subclass_map or len(subclass_map[cls_str]) == 0: #  # Check if leaf class (no subclasses)
-
-                leaf_classes_with_smiles.append(cls_str)
-
-                # Collect parent classes for this leaf
-                parents = chebi_ontology.get_superclasses(cls)
-                leaf_to_parents[cls_str] = [str(p) for p in parents]   
-
-                j += 1
-                if j % 10000 == 0:
-                    print(f"Found {j} leaf classes with SMILES so far...")
-                
-    # Save leaf to parent map
-    with open(leaf_parents_map_file, 'w') as f:
-        json.dump(leaf_to_parents, f, indent=2)
-    print(f"Saved leaf to parents map to {leaf_parents_map_file} with {len(leaf_to_parents)} entries.")
-                    
-    # Summary
-    print(f"\nDeprecated classes: {len(deprecated_classes)}")
-    print(f"Classes WITH SMILES: {len(classes_with_smiles)}")
-    print(f"Leaf classes with SMILES: {len(leaf_classes_with_smiles)}")
-
-    return set(leaf_classes_with_smiles), set(deprecated_classes)
-"""
-
-
-#NEW
 ancestor_cache = {}
 def get_all_ancestors(chebi_ontology, cls, visited=None):
     """Recursively collect all ancestor classes, using cache to avoid recomputation."""
@@ -227,6 +36,77 @@ def get_all_ancestors(chebi_ontology, cls, visited=None):
     
     return ancestors
 
+
+def _invert_subclass_map(subclass_map, all_class_ids=None):
+    """Convert parent->children map into child->parents map."""
+    parent_map = defaultdict(list)
+
+    for parent, children in subclass_map.items():
+        for child in children:
+            parent_map[child].append(parent)
+
+    # Keep all known classes present, even if they have no parents.
+    if all_class_ids:
+        for cls in all_class_ids:
+            parent_map.setdefault(cls, [])
+
+    # Deduplicate parent lists
+    for child in parent_map:
+        parent_map[child] = list(set(parent_map[child]))
+
+    return dict(parent_map)
+
+
+def _get_all_ancestors_from_parent_map(class_id, parent_map, cache):
+    """Compute all ancestors using an iterative traversal over parent_map."""
+    if class_id in cache:
+        return cache[class_id]
+
+    ancestors = set()
+    stack = list(parent_map.get(class_id, []))
+
+    while stack:
+        parent = stack.pop()
+        if parent in ancestors:
+            continue
+        ancestors.add(parent)
+
+        if parent in cache:
+            ancestors.update(cache[parent])
+            continue
+
+        stack.extend(parent_map.get(parent, []))
+
+    ordered = list(ancestors)
+    cache[class_id] = ordered
+    return ordered
+
+
+def _build_subclass_map_from_axioms(chebi_ontology, all_classes):
+    """Build parent -> direct subclasses map in one pass over ontology axioms."""
+    class_set = {str(cls) for cls in all_classes}
+    subclass_map = defaultdict(list)
+
+    for idx, axiom in enumerate(chebi_ontology.get_axioms()):
+        component = axiom.component
+        if type(component).__name__ != 'SubClassOf':
+            continue
+
+        sub = str(component.sub)
+        sup = str(component.sup)
+
+        # Keep only named-class relations (skip restrictions/anonymous expressions)
+        if sub in class_set and sup in class_set:
+            subclass_map[sup].append(sub)
+
+        if (idx + 1) % 500000 == 0:
+            print(f"Processed {idx + 1} axioms for subclass mapping...")
+
+    for parent in subclass_map:
+        subclass_map[parent] = list(set(subclass_map[parent]))
+
+    return dict(subclass_map)
+
 def find_leaf_classes_with_smiles_and_deprecated(
         chebi_ontology, 
         smiles_property,
@@ -238,27 +118,46 @@ def find_leaf_classes_with_smiles_and_deprecated(
 
     print("\nFinding leaf classes with SMILES...")
 
-    # Load or build subclass mapping for faster lookup
-    try:
-        with open(subclass_map_file, 'r') as f:
-            subclass_map = json.load(f)
-        print(f"Loaded subclass mapping from {subclass_map_file} with {len(subclass_map)} entries.")
-    except FileNotFoundError:
-        print("Building subclass mapping (may take a while)...")
-        subclass_map = defaultdict(list)
-        for idx, cls in enumerate(chebi_ontology.get_classes()):
-            subclasses = chebi_ontology.get_subclasses(cls)
-            if subclasses:
-                subclass_map[str(cls)] = [str(sub) for sub in subclasses]
-            if (idx + 1) % 10000 == 0:
-                print(f"Processed {idx + 1} classes for subclass mapping...")
-        with open(subclass_map_file, 'w') as f:
-            json.dump(subclass_map, f)
-        print(f"Saved subclass mapping to {subclass_map_file}.")
-
     # Get all classes
     all_classes = chebi_ontology.get_classes()
+    all_class_ids = [str(cls) for cls in all_classes]
     print(f"Total classes: {len(all_classes)}")
+
+    # Load or build subclass mapping for faster lookup
+    try:
+        subclass_map_start = time.time()
+        with open(subclass_map_file, 'r') as f:
+            subclass_map = json.load(f)
+        subclass_map_elapsed = time.time() - subclass_map_start
+        print(
+            f"Loaded subclass mapping from {subclass_map_file} with {len(subclass_map)} entries "
+            f"in {subclass_map_elapsed:.2f} seconds."
+        )
+    except FileNotFoundError:
+        print("Building subclass mapping from axioms in a single pass (may take a while)...")
+        subclass_map_start = time.time()
+
+        compute_start = time.time()
+        subclass_map = _build_subclass_map_from_axioms(chebi_ontology, all_classes)
+        compute_elapsed = time.time() - compute_start
+
+        write_start = time.time()
+        with open(subclass_map_file, 'w') as f:
+            json.dump(subclass_map, f)
+        write_elapsed = time.time() - write_start
+
+        subclass_map_elapsed = time.time() - subclass_map_start
+        print(
+            f"Saved subclass mapping to {subclass_map_file} in {subclass_map_elapsed:.2f} seconds "
+            f"({subclass_map_elapsed / 60:.2f} minutes)."
+        )
+        print(
+            f"Subclass map timing breakdown: compute={compute_elapsed:.2f}s, "
+            f"json_write={write_elapsed:.2f}s."
+        )
+
+    # Build child -> direct parents map once and reuse it for fast ancestor lookup.
+    direct_parent_map = _invert_subclass_map(subclass_map, all_class_ids)
 
     # Precompute property strings
     smiles_prop_str = f"<{smiles_property}>"
@@ -325,8 +224,13 @@ def find_leaf_classes_with_smiles_and_deprecated(
     # Build leaf to all ancestors map
     leaf_to_parents = {}
     i = 0
+    ancestor_cache_from_parent_map = {}
     for leaf in leaf_classes_with_smiles:
-        all_ancestors = get_all_ancestors(chebi_ontology, leaf)
+        all_ancestors = _get_all_ancestors_from_parent_map(
+            leaf,
+            direct_parent_map,
+            ancestor_cache_from_parent_map,
+        )
         leaf_to_parents[leaf] = all_ancestors
         i += 1
         if i % 1000 == 0:
@@ -564,40 +468,68 @@ def remove_classes_from_owl(input_file, classes_to_remove, output_file):
 
 """For building parent map""" #maybe move to separate file later
 
-def build_parent_map(ontology, output_json, deprecated_property):
-    """Build parent map excluding deprecated classes"""
+def build_parent_map(
+    ontology,
+    output_json,
+    deprecated_property,
+    subclass_map_file=None,
+    precomputed_deprecated_classes=None,
+):
+    """Build parent map excluding deprecated classes.
+
+    Fast path: if subclass_map_file is available, derive child->parents from that JSON.
+    """
     
     # Find deprecated classes first
-    raw_deprecated = find_deprecated_classes(ontology, deprecated_property)
-    deprecated_classes = {str(c) for c in raw_deprecated}
+    if precomputed_deprecated_classes is not None:
+        deprecated_classes = {str(c) for c in precomputed_deprecated_classes}
+        print(f"Using precomputed deprecated classes: {len(deprecated_classes)}")
+    else:
+        raw_deprecated = find_deprecated_classes(ontology, deprecated_property)
+        deprecated_classes = {str(c) for c in raw_deprecated}
 
     print(f"Excluding {len(deprecated_classes)} deprecated classes")
     
     # Convert deprecated classes to strings for consistent comparison
     
-    all_classes = ontology.get_classes()
-    string_ids = {cls: str(cls) for cls in all_classes}  # fast lookup table
     parent_map = {}
-    
-    i = 0
-    for cls in all_classes:
-        if i % 1000 == 0:
-            print(f"Processed {i} classes for parent map...")
-        i += 1
-        
-        cls_id = string_ids[cls]
-        
-        # Skip if deprecated (now comparing strings)
-        if cls_id in deprecated_classes:
-            continue
-            
-        # Get parents, excluding deprecated ones
-        direct_parents = ontology.get_superclasses(cls)
-        parents = [string_ids[parent] 
-                   for parent in direct_parents 
-                   if string_ids[parent] not in deprecated_classes]
-        
-        parent_map[cls_id] = parents
+
+    if subclass_map_file and os.path.exists(subclass_map_file):
+        print(f"Loading subclass map from {subclass_map_file} for fast parent-map build...")
+        with open(subclass_map_file, "r") as f:
+            subclass_map = json.load(f)
+
+        parent_map_full = _invert_subclass_map(subclass_map)
+        for cls_id, parents in parent_map_full.items():
+            if cls_id in deprecated_classes:
+                continue
+            parent_map[cls_id] = [p for p in parents if p not in deprecated_classes]
+        print(f"Built parent map from subclass map for {len(parent_map)} classes")
+    else:
+        all_classes = ontology.get_classes()
+        string_ids = {cls: str(cls) for cls in all_classes}  # fast lookup table
+
+        i = 0
+        for cls in all_classes:
+            if i % 1000 == 0:
+                print(f"Processed {i} classes for parent map...")
+            i += 1
+
+            cls_id = string_ids[cls]
+
+            # Skip if deprecated (now comparing strings)
+            if cls_id in deprecated_classes:
+                continue
+
+            # Get parents, excluding deprecated ones
+            direct_parents = ontology.get_superclasses(cls)
+            parents = [
+                string_ids[parent]
+                for parent in direct_parents
+                if string_ids[parent] not in deprecated_classes
+            ]
+
+            parent_map[cls_id] = parents
     
     with open(output_json, 'w') as f:
         json.dump(parent_map, f, indent=2)

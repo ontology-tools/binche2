@@ -23,6 +23,42 @@ start_time = time.time()
 A script for creating all necessary files for the project.
 """
 
+
+def _run_stage(stage_name, stage_timings, func, *args, **kwargs):
+    """Run a stage, record elapsed time, and print a compact timing line."""
+    stage_start = time.time()
+    result = func(*args, **kwargs)
+    elapsed = time.time() - stage_start
+    stage_timings.append((stage_name, elapsed))
+    print(f"[TIMING] {stage_name}: {elapsed:.2f}s ({elapsed/60:.2f} min)")
+    return result
+
+
+def _print_timing_summary(stage_timings, total_elapsed):
+    """Print stage timings and percentages of the total runtime."""
+    print("\n" + "=" * 80)
+    print("PIPELINE TIMING SUMMARY")
+    print("=" * 80)
+
+    if total_elapsed <= 0:
+        total_elapsed = 1e-9
+
+    sorted_timings = sorted(stage_timings, key=lambda x: x[1], reverse=True)
+    for stage_name, elapsed in sorted_timings:
+        pct = (elapsed / total_elapsed) * 100
+        print(
+            f"{stage_name}: {elapsed:.2f}s ({elapsed/60:.2f} min, {pct:.2f}% of total)"
+        )
+
+    measured_total = sum(elapsed for _, elapsed in stage_timings)
+    overhead = total_elapsed - measured_total
+    overhead_pct = (overhead / total_elapsed) * 100
+    print("-" * 80)
+    print(
+        f"Untracked/overhead: {overhead:.2f}s ({overhead/60:.2f} min, {overhead_pct:.2f}% of total)"
+    )
+    print("=" * 80)
+
 def rename_folder(old_name, new_name):
     """
     Rename a folder from old_name to new_name.
@@ -82,9 +118,11 @@ def finalize_folder_structure():
         rename_folder("data_new", "data")
 
 if __name__ == "__main__":
+    stage_timings = []
+
     ### Create temporary data folder for new files
     print("Creating temporary data folder...")
-    create_temp_data_folder()
+    _run_stage("create_temp_data_folder", stage_timings, create_temp_data_folder)
 
     ### Define properties and file paths
     smiles_property = "https://w3id.org/chemrof/smiles_string"
@@ -110,11 +148,19 @@ if __name__ == "__main__":
     ### Download and load the ChEBI ontology
     print("Downloading and loading ChEBI ontology...")
     # Option: download directly to data_new/ to keep separate from old versions
-    chebi_ontology = load_chebi(download_dir="data_new")
+    chebi_ontology = _run_stage(
+        "download_and_load_chebi",
+        stage_timings,
+        load_chebi,
+        download_dir="data_new",
+    )
 
     ### Find and filter leaf classes with SMILES and deprecated classes, and save the filtered ontology
     print("Removing leaf classes with SMILES and deprecated classes...")
-    classes_with_smiles, deprecated_classes = find_leaf_classes_with_smiles_and_deprecated(
+    classes_with_smiles, deprecated_classes = _run_stage(
+        "find_leaf_classes_with_smiles_and_deprecated",
+        stage_timings,
+        find_leaf_classes_with_smiles_and_deprecated,
         chebi_ontology,
         smiles_property,
         deprecated_property,
@@ -126,26 +172,75 @@ if __name__ == "__main__":
 
     ### Build map of all classes to their direct parents and save as JSON
     print("Building parent map...")
-    build_parent_map(chebi_ontology, parent_map_json, deprecated_property)
+    _run_stage(
+        "build_parent_map",
+        stage_timings,
+        build_parent_map,
+        chebi_ontology,
+        parent_map_json,
+        deprecated_property,
+        subclass_map_file=subclass_map_file,
+        precomputed_deprecated_classes=deprecated_classes,
+    )
 
     ### Build map with CHEBI short IDs to names and save as JSON
     print("Building ID to name map...")
-    map_names_to_classes(chebi_file, id_to_name_map_json)
+    _run_stage(
+        "map_names_to_classes",
+        stage_timings,
+        map_names_to_classes,
+        chebi_file,
+        id_to_name_map_json,
+    )
 
     ### Map all classes to their direct "has_role" connections and save as JSON,
     ### then create a map of all leaf classes to all their "has_role" connections (not just direct ones) and save as JSON
     ### and the reverse map of all roles to all leaf classes that have that role (directly or indirectly) and save as JSON
     print("Building roles maps...")
-    roles_map = find_has_role_connections_from_owl(chebi_file, has_role_property, deprecated_property, roles_map_json)
-    create_leaves_to_all_roles_map(roles_map_json, leaves_to_all_parents_json, leaves_to_all_roles_json, parent_map_json)
-    create_roles_to_all_leaves_map(leaves_to_all_roles_json, roles_to_all_leaves_json)
+    roles_map = _run_stage(
+        "find_has_role_connections_from_owl",
+        stage_timings,
+        find_has_role_connections_from_owl,
+        chebi_file,
+        has_role_property,
+        deprecated_property,
+        roles_map_json,
+    )
+    _run_stage(
+        "create_leaves_to_all_roles_map",
+        stage_timings,
+        create_leaves_to_all_roles_map,
+        roles_map_json,
+        leaves_to_all_parents_json,
+        leaves_to_all_roles_json,
+        parent_map_json,
+    )
+    _run_stage(
+        "create_roles_to_all_leaves_map",
+        stage_timings,
+        create_roles_to_all_leaves_map,
+        leaves_to_all_roles_json,
+        roles_to_all_leaves_json,
+    )
 
     ### Map each class to its direct roles, roles inherited from ancestor classes, and descendants of those roles in the role hierarchy.
-    create_class_to_all_roles_map(roles_map_json, parent_map_json, class_to_all_roles_json)
+    _run_stage(
+        "create_class_to_all_roles_map",
+        stage_timings,
+        create_class_to_all_roles_map,
+        roles_map_json,
+        parent_map_json,
+        class_to_all_roles_json,
+    )
 
     ### Identify structural vs functional classes (in-memory, no OWL files needed)
     print("Identifying structural vs functional classes...")
-    structural_classes, functional_classes, unknown_classes = identify_structural_vs_functional(chebi_ontology)
+    structural_classes, functional_classes, unknown_classes = _run_stage(
+        "identify_structural_vs_functional",
+        stage_timings,
+        identify_structural_vs_functional,
+        chebi_ontology,
+    )
     
     print(f"Identified {len(structural_classes)} structural classes")
     print(f"Identified {len(functional_classes)} functional classes")
@@ -153,7 +248,10 @@ if __name__ == "__main__":
 
     ### Save a CSV file with the removed leaf classes (using in-memory class sets)
     print("Saving CSV with removed leaf classes...")
-    save_leaf_classes_with_smiles(
+    _run_stage(
+        "save_leaf_classes_with_smiles",
+        stage_timings,
+        save_leaf_classes_with_smiles,
         classes_with_smiles,
         chebi_ontology,
         smiles_property,
@@ -166,15 +264,22 @@ if __name__ == "__main__":
 
     ### Build a JSON map from each class IRI to ALL its leaf descendants
     print("Building class to leaf descendants map...")
-    build_class_to_leaf_map(leaf_to_ancestors_file, class_to_leaf_output_file)
+    _run_stage(
+        "build_class_to_leaf_map",
+        stage_timings,
+        build_class_to_leaf_map,
+        leaf_to_ancestors_file,
+        class_to_leaf_output_file,
+    )
 
     ### Finalize folder structure: rename old data and move data_new to data
     print("Finalizing folder structure...")
-    finalize_folder_structure()
+    _run_stage("finalize_folder_structure", stage_timings, finalize_folder_structure)
 
     print("All files created successfully!")
     end_time = time.time()
     elapsed_time = end_time - start_time
+    _print_timing_summary(stage_timings, elapsed_time)
     print(f"Total execution time: {elapsed_time:.2f} seconds or {elapsed_time/60:.2f} minutes or {elapsed_time/3600:.2f} hours")
 
 
