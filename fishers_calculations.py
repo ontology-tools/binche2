@@ -42,6 +42,13 @@ def calculate_p_value(n_ss_annotated, n_ss_leaves, n_bg_annotated, n_bg_leaves):
     b = n_ss_leaves - n_ss_annotated
     c = n_bg_annotated - n_ss_annotated
     d = n_bg_leaves - n_bg_annotated - b
+    
+    # Validate contingency table values are non-negative
+    if a < 0 or b < 0 or c < 0 or d < 0:
+        print(f"Warning: Invalid contingency table with negative values: a={a}, b={b}, c={c}, d={d}")
+        print(f"  (n_ss_annotated={n_ss_annotated}, n_ss_leaves={n_ss_leaves}, n_bg_annotated={n_bg_annotated}, n_bg_leaves={n_bg_leaves})")
+        return None, None
+    
     odds, p = fisher_exact([[a, b], [c, d]], alternative='greater')
     # odds, p = fisher_exact([[a, b], [c, d]], alternative='two-sided') 
     # ‘greater’: odds ratio of the underlying population is greater than one
@@ -161,6 +168,11 @@ def get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, s
 
             odds, p_value = calculate_p_value(n_ss_annotated, n_ss_leaves, n_bg_annotated, n_bg_leaves)
 
+            # Skip if calculation failed due to invalid counts
+            if p_value is None:
+                print(f"Skipping class {id_to_name(class_to_check)} due to invalid contingency table")
+                continue
+
             results[class_to_check]={
                 "class": id_to_name(class_to_check),
                 # "class_id": strip_prefix(class_to_check),
@@ -186,6 +198,11 @@ def get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, s
             n_ss_annotated = get_n_ss_annotated_for_roles(studyset_leaves, role_to_check, class_to_all_roles_map, roles_to_leaves_map)
            
             odds, p_value = calculate_p_value(n_ss_annotated, n_ss_leaves, n_bg_annotated, n_bg_leaves)
+            
+            # Skip if calculation failed due to invalid counts
+            if p_value is None:
+                print(f"Skipping role {id_to_name(role_to_check)} due to invalid contingency table")
+                continue
             
             results[role_to_check]={
                 "class": id_to_name(role_to_check),
