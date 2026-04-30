@@ -68,6 +68,7 @@ def normalize_id(raw_id: str) -> str:
     return value
 
 def get_leaves(studyset_list, leaves_csv, class_to_leaf_map):
+    """ Get leaf descendants for the input classes, or the class itself if it's already a leaf. """
     studyset_leaves = set()
 
     leaves_df = pd.read_csv(leaves_csv)
@@ -243,7 +244,7 @@ def run_enrichment_analysis(studyset_list,
                             classification="structural",
                             check_leaf_classes=False):
 
-    pruning_before_enrichment = root_children_prune or linear_branch_prune # add other pruning strategies when implemented
+    pruning_before_enrichment = root_children_prune or linear_branch_prune
 
     # Files
     removed_leaves_csv = "data/removed_leaf_classes_with_smiles.csv"

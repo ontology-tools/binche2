@@ -3,6 +3,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from flask import Flask, render_template, request, redirect, url_for, session, Response
 from fishers_calculations import run_enrichment_analysis, run_enrichment_analysis_plain_enrich_pruning_strategy
+from wikidata.narrow_background_fishers import run_narrow_background_enrichment_analysis, run_narrow_background_enrichment_analysis_plain_enrich_pruning_strategy
 from weighted_calculations import run_weighted_enrichment_analysis, run_weighted_enrichment_analysis_plain_enrich_pruning_strategy, auto_scale_weights
 from visualitations_and_pruning import graph_to_cytospace_json
 import re
@@ -42,6 +43,8 @@ def submission():
         session['classification'] = classification # Store classification in session
         smiles_option = request.form.get('smiles_option')
         session['smiles_option'] = smiles_option # Store smiles option in session
+        background = request.form.get('background') 
+        session['background'] = background # Store background in session
         
         return render_template('submission.html', user_study_set=study_set)
     
@@ -172,6 +175,7 @@ def convert_smiles_to_chebi(smiles_string):
                         print(f"Classification response content: {response.content}")
                 if chebi_ids:
                     was_resolved = True
+                
                 print(f"Found {len(chebi_ids)} ChEBI IDs from classification for SMILES {smiles_string}")
 
         else:
@@ -232,30 +236,56 @@ def run_analysis():
         'benjamini_hochberg_correct': benjamini_hochberg_correct
     }
 
+    background = session.get('background')
     looping_prune_method = request.form.get('looping_prune_method')
+
+
     if looping_prune_method == 'no_loop_prune':
         # User chose no looping pruning, proceed to other pruning options
         pass
     elif looping_prune_method == 'plain_enrich':
-        # Use weighted analysis if weights are present, otherwise use standard analysis
-        if weights_dict:
-            results, pruned_G = run_weighted_enrichment_analysis(weights_dict,
-                                                classification=session.get('classification'))
-        else:
-            results, pruned_G = run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
-                                                classification=session.get('classification'))
-        # Save JSON representation of pruned_G in session for graph visualization
-        graph_json_file = f'website/static/data/graph_{session["session_id"]}.json'
-        graph_to_cytospace_json(pruned_G, graph_json_file, results)
-        session['graph_file'] = f'graph_{session["session_id"]}.json'
+        if background == 'full':
+            # Use weighted analysis if weights are present, otherwise use standard analysis
+            if weights_dict:
+                results, pruned_G = run_weighted_enrichment_analysis(weights_dict,
+                                                    classification=session.get('classification'))
+            else:
+                results, pruned_G = run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
+                                                    classification=session.get('classification'))
+            # Save JSON representation of pruned_G in session for graph visualization
+            graph_json_file = f'website/static/data/graph_{session["session_id"]}.json'
+            graph_to_cytospace_json(pruned_G, graph_json_file, results)
+            session['graph_file'] = f'graph_{session["session_id"]}.json'
 
-        session['pruning'] = {
-            'method': 'plain_enrich'
-        }
+            session['pruning'] = {
+                'method': 'plain_enrich'
+            }
 
-        session['unresolved_smiles'] = unresolved_smiles
+            session['unresolved_smiles'] = unresolved_smiles
 
-        return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'))
+            return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'))
+
+        elif background == 'human':
+            if weights_dict:
+                print("Weights are not currently supported for narrow background analysis.")
+                return render_template('submission.html', user_study_set=raw_studyset, error_message="Weights are not currently supported for narrow background analysis. Please remove weights and try again.")
+            
+            else:
+                results, pruned_G, leaves_to_expand_background, parents_to_expand_background = run_narrow_background_enrichment_analysis_plain_enrich_pruning_strategy(
+                    studyset_list,
+                    classification=session.get('classification')
+                )
+                graph_json_file = f'website/static/data/graph_{session["session_id"]}.json'
+                graph_to_cytospace_json(pruned_G, graph_json_file, results)
+                session['graph_file'] = f'graph_{session["session_id"]}.json'
+
+                session['pruning'] = {
+                    'method': 'plain_enrich'
+                }
+
+                session['unresolved_smiles'] = unresolved_smiles
+
+                return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'))
 
     # PRUNING OPTIONS
     root_children_prune = request.form.get('root_children_prune') == 'true'
@@ -269,8 +299,17 @@ def run_analysis():
 
     zero_degree_prune = request.form.get('zero_degree_prune') == 'true'
     
+    background = session.get('background')
+    
+    # Initialize expanded leaves/parents tracking (for human background)
+    leaves_to_expand_background = set()
+    parents_to_expand_background = set()
+    
     # Use weighted analysis if weights are present, otherwise use standard analysis
     if weights_dict:
+        if background == 'human':
+            print("Weights are not currently supported for narrow background analysis.")
+            return render_template('submission.html', user_study_set=raw_studyset, error_message="Weights are not currently supported for narrow background analysis. Please remove weights and try again.")
         results, pruned_G = run_weighted_enrichment_analysis(weights_dict,
                                             levels=levels,
                                             n=linear_branch_n,
@@ -283,14 +322,24 @@ def run_analysis():
                                             bonferroni_correct=bonferroni_correct,
                                             benjamini_hochberg_correct=benjamini_hochberg_correct)
     else:
-        results, pruned_G = run_enrichment_analysis(studyset_list,
-                                          bonferroni_correct=bonferroni_correct,
-                                          benjamini_hochberg_correct=benjamini_hochberg_correct,
-                                           root_children_prune=root_children_prune,levels=levels,
-                                           linear_branch_prune=linear_branch_prune, n=linear_branch_n,
-                                           high_p_value_prune=high_p_value_prune, p_value_threshold=p_value_threshold,
-                                           zero_degree_prune=zero_degree_prune,
-                                           classification=session.get('classification'))
+        if background == 'human':
+            results, pruned_G, leaves_to_expand_background, parents_to_expand_background = run_narrow_background_enrichment_analysis(studyset_list,
+                                              bonferroni_correct=bonferroni_correct,
+                                              benjamini_hochberg_correct=benjamini_hochberg_correct,
+                                               root_children_prune=root_children_prune,levels=levels,
+                                               linear_branch_prune=linear_branch_prune, n=linear_branch_n,
+                                               high_p_value_prune=high_p_value_prune, p_value_threshold=p_value_threshold,
+                                               zero_degree_prune=zero_degree_prune,
+                                               classification=session.get('classification'))
+        else:
+            results, pruned_G = run_enrichment_analysis(studyset_list,
+                                              bonferroni_correct=bonferroni_correct,
+                                              benjamini_hochberg_correct=benjamini_hochberg_correct,
+                                               root_children_prune=root_children_prune,levels=levels,
+                                               linear_branch_prune=linear_branch_prune, n=linear_branch_n,
+                                               high_p_value_prune=high_p_value_prune, p_value_threshold=p_value_threshold,
+                                               zero_degree_prune=zero_degree_prune,
+                                               classification=session.get('classification'))
                                        
     # Save JSON representation of pruned_G in session for graph visualization
     graph_json_file = f'website/static/data/graph_{session["session_id"]}.json'
@@ -310,7 +359,7 @@ def run_analysis():
 
     session['unresolved_smiles'] = unresolved_smiles
 
-    return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'))
+    return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'), leaves_to_expand_background=leaves_to_expand_background, parents_to_expand_background=parents_to_expand_background)
 
 @app.route('/graph')
 def graph():

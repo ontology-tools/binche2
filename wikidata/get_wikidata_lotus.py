@@ -2,6 +2,26 @@ import requests
 import pandas as pd
 from pathlib import Path
 
+
+def normalize_chebi_id(raw_value):
+    if pd.isna(raw_value):
+        return None
+    value = str(raw_value).strip()
+    if not value:
+        return None
+
+    values = []
+    for part in value.split("|"):
+        part = part.strip()
+        if part.startswith("http://purl.obolibrary.org/obo/CHEBI_"):
+            values.append(part.rsplit("/", 1)[-1])
+        elif part.startswith("CHEBI:"):
+            values.append(part.replace(":", "_", 1))
+        else:
+            values.append(part)
+
+    return "|".join(values)
+
 """
 The scripts loads the latest Wikidata LOTUS dump from Zenodo, which contains pre-extracted compound-taxon pairs.
 
@@ -156,9 +176,9 @@ def connect_smiles_to_chebi_ids(new_file_path):
         isomeric_smiles = row['isomericSmiles']
 
         if pd.notna(canonical_smiles) and canonical_smiles in chebi_smiles_dict:
-            wiki_compounds.at[index, 'chebi_id'] = chebi_smiles_dict[canonical_smiles]
+            wiki_compounds.at[index, 'chebi_id'] = normalize_chebi_id(chebi_smiles_dict[canonical_smiles])
         elif pd.notna(isomeric_smiles) and isomeric_smiles in chebi_smiles_dict:
-            wiki_compounds.at[index, 'chebi_id'] = chebi_smiles_dict[isomeric_smiles]
+            wiki_compounds.at[index, 'chebi_id'] = normalize_chebi_id(chebi_smiles_dict[isomeric_smiles])
     
         # Print progress every 1000 rows
         if index % 1000 == 0:

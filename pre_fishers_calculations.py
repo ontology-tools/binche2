@@ -94,7 +94,7 @@ def count_removed_classes_for_class(class_iri, leaf_descendants_map, classificat
             print(f"⚠️ Class {class_iri} has no descendants in full ontology.")
             return 0, 0
 
-        # Get string of sublclasses from the map
+        # Get string of subclasses from the map
         leaves_structure = leaf_descendants_map[str(class_iri)]
         leaves.update(leaves_structure)
     

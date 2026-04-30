@@ -71,7 +71,23 @@
 
 <h2 class="grey"> Processing Summary </h2>
 <p class="muted-log"><strong>Analysed leaves:</strong> {{results.study_set}}</p>
-<p class="muted-log"><strong>Removed nodes:</strong> (through pruning) {{results.removed_nodes}}</p>
+<p class="muted-log"><strong>Removed nodes through pruning:</strong> {{results.removed_nodes}}</p>
+{% if leaves_to_expand_background %}
+<p class="muted-log"><strong>Leaves expanded beyond chosen background:</strong></p>
+<ul class="muted-log" style="margin-left: 20px;">
+{% for leaf in leaves_to_expand_background %}
+    <li>{{ leaf }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+{% if parents_to_expand_background %}
+<p class="muted-log"><strong>Parent classes requiring background expansion:</strong></p>
+<ul class="muted-log" style="margin-left: 20px;">
+{% for parent in parents_to_expand_background %}
+    <li>{{ parent }}</li>
+{% endfor %}
+</ul>
+{% endif %}
 {% if unresolved_smiles and smiles_option == 'use_parents' %}
 <p class="muted-log"><strong>Unresolved SMILES</strong> (could not find ChEBI ID or parents):</p>
 <ul class="muted-log" style="margin-left: 20px;">
