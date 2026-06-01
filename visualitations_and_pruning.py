@@ -541,13 +541,13 @@ def graph_to_cytospace_json(G, output_file, enrichment_results=None):
         }
         # Add enrichment results to nodes if provided
             
-        if enr_dict and label in enr_dict: 
+        if enr_dict is not None and label in enr_dict: 
             enr = enr_dict[label]
             node_data["p_value"] = enr.get("p_value")
             node_data["p_value_corrected"] = enr.get("p_value_corrected")
             node_data["p_value_reason"] = "present"
         else:
-            if not enr_dict:
+            if enr_dict is None:
                 reason = "no_enrichment_results_dict"
             elif label in study_set_labels:
                 reason = "study_set_leaf_not_tested"

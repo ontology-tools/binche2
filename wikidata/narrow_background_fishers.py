@@ -13,7 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from fishers_calculations import normalize_id, calculate_p_value, get_ancestors_for_inputs, get_n_ss_annotated, print_enrichment_results
+from fishers_calculations import normalize_id, calculate_p_value, get_ancestors_for_inputs, get_n_ss_annotated, get_n_ss_annotated_for_roles, print_enrichment_results
 from visualitations_and_pruning import root_children_pruner, linear_branch_collapser_pruner_remove_less, high_p_value_branch_pruner, zero_degree_pruner, create_graph_from_map, id_to_name, create_graph_with_roles_and_structures
 from pre_fishers_calculations import count_removed_classes_for_class, count_removed_classes_for_roles
 from multiple_test_corrections import bonferroni_correction, benjamini_hochberg_fdr_correction
@@ -222,7 +222,7 @@ def get_studyset_leaves_narrow(studyset_list, human_entities_leaves_json, leaves
 
     return list(studyset_leaves), leaves_to_expand_background, parents_to_expand_background
 
-def count_narrow_leaves(narrow_leaves_json, leaves_to_expand_background):
+def count_narrow_leaves(narrow_leaves_json, leaves_to_expand_background, expand_background=True):
 
     # Count the leaves in the narrow background
     with open(narrow_leaves_json, "r", encoding="utf-8") as f:
@@ -230,17 +230,23 @@ def count_narrow_leaves(narrow_leaves_json, leaves_to_expand_background):
     narrow_leaves = set(cached.get("narrow_leaves", []))
 
     # Add leaves outside the narrow background that are a part of the study set (these will be added to the background for enrichment calculations)
-    if leaves_to_expand_background:
+    if expand_background and leaves_to_expand_background:
         print(f"Adding {len(leaves_to_expand_background)} leaves outside the narrow background to the background set for enrichment calculations.")
         narrow_leaves.update(leaves_to_expand_background)
+    elif not expand_background and leaves_to_expand_background:
+        print(f"Background expansion disabled: keeping {len(leaves_to_expand_background)} study leaves outside narrow background separate.")
 
     return len(narrow_leaves)
 
-def count_narrow_leaves_for_class(class_iri, narrow_leaves_json, leaf_descendants_map):
+def count_narrow_leaves_for_class(class_iri, narrow_leaves_json, leaf_descendants_map, leaves_to_expand_background=None, expand_background=True):
     """Count how many narrow leaves are associated with the given class_iri."""
     with open(narrow_leaves_json, "r", encoding="utf-8") as f:
         cached = json.load(f)
     narrow_leaves = set(cached.get("narrow_leaves", []))
+    
+    # Add leaves outside the narrow background that are part of the study set
+    if expand_background and leaves_to_expand_background:
+        narrow_leaves.update(leaves_to_expand_background)
 
     if str(class_iri) not in leaf_descendants_map: 
         print(f"⚠️ Class {class_iri} is not found in map file.")
@@ -251,16 +257,38 @@ def count_narrow_leaves_for_class(class_iri, narrow_leaves_json, leaf_descendant
     # Get string of subclasses from the map
     leaves_structure = leaf_descendants_map[str(class_iri)]
 
-    # Find the ones that are in the narrow background
+    # Find the ones that are in the narrow background (including expanded leaves)
     narrow_leaves_for_class = set(leaves_structure).intersection(narrow_leaves)
 
     return narrow_leaves_for_class, len(narrow_leaves_for_class)
+
+def count_narrow_leaves_for_role(role_iri, narrow_leaves_json, roles_to_leaves_map, leaves_to_expand_background=None, expand_background=True):
+    """Count how many narrow leaves are associated with the given role_iri."""
+    with open(narrow_leaves_json, "r", encoding="utf-8") as f:
+        cached = json.load(f)
+    narrow_leaves = set(cached.get("narrow_leaves", []))
+    
+    # Add leaves outside the narrow background that are part of the study set
+    if expand_background and leaves_to_expand_background:
+        narrow_leaves.update(leaves_to_expand_background)
+
+    if str(role_iri) not in roles_to_leaves_map:
+        print(f"⚠️ Role {role_iri} is not found in roles_to_leaves_map.")
+        return 0, 0
+
+    leaves_for_role = roles_to_leaves_map.get(str(role_iri), [])
+    if not leaves_for_role:
+        print(f"⚠️ Role {role_iri} has no associated leaves.")
+        return 0, 0
+
+    narrow_leaves_for_role = set(leaves_for_role).intersection(narrow_leaves) # only count leaves in the expanded narrow background
+    return narrow_leaves_for_role, len(narrow_leaves_for_role)
  
 
-def get_enrichment_values_narrow(narrow_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map, class_to_all_roles_map, roles_to_leaves_map, studyset_ancestors_roles, leaves_to_expand_background):
+def get_enrichment_values_narrow(narrow_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map, class_to_all_roles_map, roles_to_leaves_map, studyset_ancestors_roles, leaves_to_expand_background, expand_background=True):
 
     # n_bg_leaves and n_ss_leaves will be the same for all classes
-    n_bg_leaves = count_narrow_leaves(narrow_leaves_csv, leaves_to_expand_background)
+    n_bg_leaves = count_narrow_leaves(narrow_leaves_csv, leaves_to_expand_background, expand_background)
     n_ss_leaves = len(studyset_leaves)
 
     results =  {} # dictionary to hold results
@@ -276,7 +304,9 @@ def get_enrichment_values_narrow(narrow_leaves_csv, classification, studyset_lea
             _, n_bg_annotated = count_narrow_leaves_for_class(
                 class_to_check,
                 narrow_leaves_csv,
-                class_to_leaf_map
+                class_to_leaf_map,
+                leaves_to_expand_background,
+                expand_background
             )
             n_ss_annotated = get_n_ss_annotated(
                 studyset_leaves,
@@ -308,32 +338,38 @@ def get_enrichment_values_narrow(narrow_leaves_csv, classification, studyset_lea
     # Calculate enrichment for role classes
     if classification in ["functional", "full"] and studyset_ancestors_roles:
 
-        print(f"Role-based enrichment is not implemented yet.")
-        # TODO: IMPLEMENT LATER
-        
-        """
         print(f"Calculating enrichment for {len(studyset_ancestors_roles)} roles...")
         for role_to_check in studyset_ancestors_roles:
-            _, n_bg_annotated = count_removed_classes_for_roles(role_to_check, class_to_leaf_map, classification, roles_to_leaves_map)
-            n_ss_annotated = get_n_ss_annotated_for_roles(studyset_leaves, role_to_check, class_to_all_roles_map, roles_to_leaves_map)
-           
+            _, n_bg_annotated = count_narrow_leaves_for_role(
+                role_to_check,
+                narrow_leaves_csv,
+                roles_to_leaves_map,
+                leaves_to_expand_background,
+                expand_background
+            )
+            n_ss_annotated = get_n_ss_annotated_for_roles(
+                studyset_leaves,
+                role_to_check,
+                class_to_all_roles_map,
+                roles_to_leaves_map,
+            )
+
             odds, p_value = calculate_p_value(n_ss_annotated, n_ss_leaves, n_bg_annotated, n_bg_leaves)
-            
+
             # Skip if calculation failed due to invalid counts
             if p_value is None:
                 print(f"Skipping role {id_to_name(role_to_check)} due to invalid contingency table")
                 continue
-            
-            results[role_to_check]={
+
+            results[role_to_check] = {
                 "class": id_to_name(role_to_check),
                 "n_ss_annotated": n_ss_annotated,
                 "n_ss_leaves": n_ss_leaves,
                 "n_bg_annotated": n_bg_annotated,
                 "n_bg_leaves": n_bg_leaves,
                 "odds_ratio": odds,
-                "p_value": p_value
+                "p_value": p_value,
             }
-            """
 
     return results
 
@@ -349,7 +385,8 @@ def run_narrow_background_enrichment_analysis(studyset_list,
                             p_value_threshold=0.05,
                             zero_degree_prune=False,
                             classification="structural",
-                            narrow_background_leaves_json="data/human_entities_leaves.json"):
+                            narrow_background_leaves_json="data/human_entities_leaves.json",
+                            expand_background=True):
 
     pruning_before_enrichment = root_children_prune or linear_branch_prune
 
@@ -386,40 +423,50 @@ def run_narrow_background_enrichment_analysis(studyset_list,
     # print(f"Study set ancestors: {studyset_ancestors_all}")
     print(f"Number of study set ancestors: {len(studyset_ancestors_all)}")
 
-    """
     if classification in ["functional", "full"]:
-        # Collect roles associated with structural ancestors AND leaves
+        # Build expanded narrow leaf set (narrow background + any leaves from studyset outside it)
+        with open(narrow_background_leaves_json, 'r', encoding='utf-8') as f:
+            cached_narrow = json.load(f)
+        narrow_leaves_set = set(cached_narrow.get("narrow_leaves", []))
+        expanded_narrow_leaves = set(narrow_leaves_set)
+        if expand_background and leaves_to_expand_background:
+            expanded_narrow_leaves.update(leaves_to_expand_background)
+
+        # Collect roles only for classes/ leaves connected to the expanded narrow background
         studyset_ancestors_roles = set()
-        
-        # Add roles from leaves
+
+        # Add roles from leaves that are in the expanded narrow set
         for leaf in studyset_leaves:
-            studyset_ancestors_roles.update(class_to_all_roles_map.get(leaf, []))
-        
-        # Add roles from structural ancestors
+            if leaf in expanded_narrow_leaves:
+                studyset_ancestors_roles.update(class_to_all_roles_map.get(leaf, []))
+
+        # Add roles from structural ancestors that have leaf descendants in the expanded narrow set
         for class_to_check in studyset_ancestors_all:
-            studyset_ancestors_roles.update(class_to_all_roles_map.get(class_to_check, []))
-        
-        # Also include all ancestors of these roles (they will appear in the graph)
+            leaf_descs = set(class_to_leaf_map.get(class_to_check, []))
+            if leaf_descs and leaf_descs.intersection(expanded_narrow_leaves):
+                studyset_ancestors_roles.update(class_to_all_roles_map.get(class_to_check, []))
+
+        # Also include role ancestors, but only if those ancestor roles have leaves in expanded narrow set
         with open(parent_map_file, 'r') as f:
             parent_map = json.load(f)
-        
+
         roles_with_ancestors = set(studyset_ancestors_roles)
         to_process = list(studyset_ancestors_roles)
-        
+
         while to_process:
             role = to_process.pop(0)
             for parent in parent_map.get(role, []):
-                if parent not in roles_with_ancestors:
+                if parent in roles_with_ancestors:
+                    continue
+                parent_leaves = set(roles_to_leaves_map.get(parent, []))
+                if parent_leaves and parent_leaves.intersection(expanded_narrow_leaves):
                     roles_with_ancestors.add(parent)
                     to_process.append(parent)
-        
+
         studyset_ancestors_roles = roles_with_ancestors
         print(f"Number of roles (including ancestors): {len(studyset_ancestors_roles)}")
     else:
         studyset_ancestors_roles = set()
-        """
-    studyset_ancestors_roles = set()
-    # print("Role class enrichment is not implemented yet, skipping role collection for now.")
   
     G = create_graph_with_roles_and_structures(studyset_leaves, studyset_ancestors_all, 
                             studyset_ancestors_roles, parent_map_file, 
@@ -466,6 +513,7 @@ def run_narrow_background_enrichment_analysis(studyset_list,
         roles_to_leaves_map=roles_to_leaves_map,
         studyset_ancestors_roles=studyset_ancestors_roles,
         leaves_to_expand_background=leaves_to_expand_background,
+        expand_background=expand_background,
     )
 
     #print("Enrichment results:")
@@ -541,7 +589,8 @@ def run_narrow_background_enrichment_analysis_plain_enrich_pruning_strategy(
         n=0,                # for linear branch pruner (0 = remove all intermediate nodes)
         p_value_threshold=0.05,
         classification="structural",
-        narrow_background_leaves_json="data/human_entities_leaves.json"):
+        narrow_background_leaves_json="data/human_entities_leaves.json",
+        expand_background=True):
 
     # Files
     removed_leaves_full_csv = "data/removed_leaf_classes_with_smiles.csv"
@@ -574,11 +623,50 @@ def run_narrow_background_enrichment_analysis_plain_enrich_pruning_strategy(
 
     all_removed_nodes = set()
 
-    # Role classification is not yet implemented for narrow background.
-    # TODO: when implementing, mirror the role collection block from
-    # run_enrichment_analysis_plain_enrich_pruning_strategy and replace
-    # get_enrichment_values_narrow's stub with real role enrichment logic.
-    studyset_ancestors_roles = set()
+    if classification in ["functional", "full"]:
+        # Build expanded narrow leaf set (narrow background + any leaves from studyset outside it)
+        with open(narrow_background_leaves_json, 'r', encoding='utf-8') as f:
+            cached_narrow = json.load(f)
+        narrow_leaves_set = set(cached_narrow.get("narrow_leaves", []))
+        expanded_narrow_leaves = set(narrow_leaves_set)
+        if expand_background and leaves_to_expand_background:
+            expanded_narrow_leaves.update(leaves_to_expand_background)
+
+        # Collect roles only for classes/ leaves connected to the expanded narrow background
+        studyset_ancestors_roles = set()
+
+        # Add roles from leaves that are in the expanded narrow set
+        for leaf in studyset_leaves:
+            if leaf in expanded_narrow_leaves:
+                studyset_ancestors_roles.update(class_to_all_roles_map.get(leaf, []))
+
+        # Add roles from structural ancestors that have leaf descendants in the expanded narrow set
+        for class_to_check in studyset_ancestors:
+            leaf_descs = set(class_to_leaf_map.get(class_to_check, []))
+            if leaf_descs and leaf_descs.intersection(expanded_narrow_leaves):
+                studyset_ancestors_roles.update(class_to_all_roles_map.get(class_to_check, []))
+
+        # Also include role ancestors, but only if those ancestor roles have leaves in expanded narrow set
+        with open(parent_map_file, 'r') as f:
+            parent_map = json.load(f)
+
+        roles_with_ancestors = set(studyset_ancestors_roles)
+        to_process = list(studyset_ancestors_roles)
+
+        while to_process:
+            role = to_process.pop(0)
+            for parent in parent_map.get(role, []):
+                if parent in roles_with_ancestors:
+                    continue
+                parent_leaves = set(roles_to_leaves_map.get(parent, []))
+                if parent_leaves and parent_leaves.intersection(expanded_narrow_leaves):
+                    roles_with_ancestors.add(parent)
+                    to_process.append(parent)
+
+        studyset_ancestors_roles = roles_with_ancestors
+        print(f"Number of roles (including ancestors): {len(studyset_ancestors_roles)}")
+    else:
+        studyset_ancestors_roles = set()
 
     # Enrichment is calculated up front (before graph construction),
     # using the fixed leaves_to_expand_background from leaf resolution above.
@@ -593,6 +681,7 @@ def run_narrow_background_enrichment_analysis_plain_enrich_pruning_strategy(
         roles_to_leaves_map=roles_to_leaves_map,
         studyset_ancestors_roles=studyset_ancestors_roles,
         leaves_to_expand_background=leaves_to_expand_background,
+        expand_background=expand_background,
     )
 
     print("Enrichment results:")

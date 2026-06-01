@@ -70,21 +70,24 @@
 </table>
 
 <h2 class="grey"> Processing Summary </h2>
-<p class="muted-log"><strong>Analysed leaves:</strong> {{results.study_set}}</p>
-<p class="muted-log"><strong>Removed nodes through pruning:</strong> {{results.removed_nodes}}</p>
-{% if leaves_to_expand_background %}
+<p class="muted-log"><strong>Analysed leaves:</strong> {{ results.study_set | default([]) | join(', ') }}</p>
+<p class="muted-log"><strong>Removed nodes through pruning:</strong> {{ results.removed_nodes | default([]) | join(', ') }}</p>
+{% if background == 'human' %}
+<p class="muted-log"><strong>Background expansion enabled:</strong> {{ expand_background }}</p>
+{% endif %}
+{% if expand_background and leaves_to_expand_background %}
 <p class="muted-log"><strong>Leaves expanded beyond chosen background:</strong></p>
 <ul class="muted-log" style="margin-left: 20px;">
 {% for leaf in leaves_to_expand_background %}
-    <li>{{ leaf }}</li>
+    <li>{{ leaf.split('/')|last|replace('_', ':') }}</li>
 {% endfor %}
 </ul>
 {% endif %}
-{% if parents_to_expand_background %}
+{% if expand_background and parents_to_expand_background %}
 <p class="muted-log"><strong>Parent classes requiring background expansion:</strong></p>
 <ul class="muted-log" style="margin-left: 20px;">
 {% for parent in parents_to_expand_background %}
-    <li>{{ parent }}</li>
+    <li>{{ parent.split('/')|last|replace('_', ':') }}</li>
 {% endfor %}
 </ul>
 {% endif %}

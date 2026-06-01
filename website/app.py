@@ -45,6 +45,9 @@ def submission():
         session['smiles_option'] = smiles_option # Store smiles option in session
         background = request.form.get('background') 
         session['background'] = background # Store background in session
+        # Store user's preference for expanding the human background (checkbox)
+        expand_background = bool(request.form.get('expand_background'))
+        session['expand_background'] = expand_background
         
         return render_template('submission.html', user_study_set=study_set)
     
@@ -219,6 +222,11 @@ def run_analysis():
     if classification:
         session['classification'] = classification
     
+    # Get background from form (allow changing it during re-run)
+    background_from_form = request.form.get('background')
+    if background_from_form:
+        session['background'] = background_from_form
+    
     # Keep the correction selection stable across re-runs.
     previous_correction = session.get('correction_method', {
         'bonferroni_correct': False,
@@ -263,7 +271,7 @@ def run_analysis():
 
             session['unresolved_smiles'] = unresolved_smiles
 
-            return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'))
+            return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'), expand_background=session.get('expand_background', True), background=session.get('background', 'full'))
 
         elif background == 'human':
             if weights_dict:
@@ -273,7 +281,8 @@ def run_analysis():
             else:
                 results, pruned_G, leaves_to_expand_background, parents_to_expand_background = run_narrow_background_enrichment_analysis_plain_enrich_pruning_strategy(
                     studyset_list,
-                    classification=session.get('classification')
+                    classification=session.get('classification'),
+                    expand_background=session.get('expand_background', True)
                 )
                 graph_json_file = f'website/static/data/graph_{session["session_id"]}.json'
                 graph_to_cytospace_json(pruned_G, graph_json_file, results)
@@ -285,7 +294,7 @@ def run_analysis():
 
                 session['unresolved_smiles'] = unresolved_smiles
 
-                return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'))
+                return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'), leaves_to_expand_background=leaves_to_expand_background, parents_to_expand_background=parents_to_expand_background, expand_background=session.get('expand_background', True), background=session.get('background', 'full'))
 
     # PRUNING OPTIONS
     root_children_prune = request.form.get('root_children_prune') == 'true'
@@ -330,7 +339,8 @@ def run_analysis():
                                                linear_branch_prune=linear_branch_prune, n=linear_branch_n,
                                                high_p_value_prune=high_p_value_prune, p_value_threshold=p_value_threshold,
                                                zero_degree_prune=zero_degree_prune,
-                                               classification=session.get('classification'))
+                                               classification=session.get('classification'),
+                                               expand_background=session.get('expand_background', True))
         else:
             results, pruned_G = run_enrichment_analysis(studyset_list,
                                               bonferroni_correct=bonferroni_correct,
@@ -359,7 +369,7 @@ def run_analysis():
 
     session['unresolved_smiles'] = unresolved_smiles
 
-    return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'), leaves_to_expand_background=leaves_to_expand_background, parents_to_expand_background=parents_to_expand_background)
+    return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'), leaves_to_expand_background=leaves_to_expand_background, parents_to_expand_background=parents_to_expand_background, expand_background=session.get('expand_background', True), background=session.get('background', 'full'))
 
 @app.route('/graph')
 def graph():
@@ -368,11 +378,13 @@ def graph():
     pruning = session.get('pruning', {})
     correction_method = session.get('correction_method', {})
     classification = session.get('classification', 'structural')
+    background = session.get('background', 'full')
     return render_template('graph.html', 
                          graph_file=graph_file,
                          pruning=pruning, 
                          correction_method=correction_method,
                          classification=classification,
+                         background=background,
                          smiles_option=session.get('smiles_option'))
 
 

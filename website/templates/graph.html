@@ -585,11 +585,31 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="pruningModalLabel">Change Target, Correction Method, and Pruning</h5>
+                <h5 class="modal-title" id="pruningModalLabel">Change Background, Target, Correction Method, and Pruning</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form action="/run_analysis" method="POST" id="pruningForm">
+                    <!-- BACKGROUND/ENTITY SELECTION -->
+                    <div class="mb-3">
+                        <h6>Background Entity Set:</h6>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="background" id="background_full" value="full" 
+                            {% if background == 'full' %} checked {% endif %} required>
+                            <label class="form-check-label" for="background_full">
+                                Full background
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="background" id="background_human" value="human"
+                            {% if background == 'human' %} checked {% endif %}>
+                            <label class="form-check-label" for="background_human">
+                                Human background
+                            </label>
+                        </div>
+                    </div>
+                    <hr class="my-3" style="opacity: 0.3;">
+
                     <!-- CLASSIFICATION -->
                     <div class="mb-3">
                         <h6>Target of Enrichment:</h6>
