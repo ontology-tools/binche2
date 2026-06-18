@@ -3,6 +3,10 @@ import pandas as pd
 from pathlib import Path
 
 
+DEFAULT_COMPOUNDS_WITH_CHEBI_IDS = "data/wikidata/created/compounds_with_chebi_ids.tsv"
+DEFAULT_HOMO_SAPIENS_OUTPUT = "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens.tsv"
+
+
 def normalize_chebi_id(raw_value):
     if pd.isna(raw_value):
         return None
@@ -174,7 +178,7 @@ def connect_smiles_to_chebi_ids(new_file_path):
     for index, row in wiki_compounds.iterrows():
         canonical_smiles = row['canonicalSmiles']
         isomeric_smiles = row['isomericSmiles']
-
+ 
         if pd.notna(canonical_smiles) and canonical_smiles in chebi_smiles_dict:
             wiki_compounds.at[index, 'chebi_id'] = normalize_chebi_id(chebi_smiles_dict[canonical_smiles])
         elif pd.notna(isomeric_smiles) and isomeric_smiles in chebi_smiles_dict:
@@ -282,10 +286,48 @@ def count_chebi_ids(input_file_path):
           f"({(matched_chebi_count/len(compounds))*100:.2f}%).")
 
 
+def create_wikidata_output_files(
+    compounds_with_chebi_ids_path=DEFAULT_COMPOUNDS_WITH_CHEBI_IDS,
+    homo_sapiens_output_path=DEFAULT_HOMO_SAPIENS_OUTPUT,
+    include_download=True,
+):
+    """Create all standard Wikidata output files used downstream.
+
+    Output files:
+    - compounds_with_chebi_ids_path
+    - homo_sapiens_output_path
+    """
+
+    if include_download:
+        download_wikidata_lotus()
+
+    Path(compounds_with_chebi_ids_path).parent.mkdir(parents=True, exist_ok=True)
+
+    print("[WIKIDATA] Matching SMILES to ChEBI IDs...")
+    connect_smiles_to_chebi_ids(compounds_with_chebi_ids_path)
+    count_matched_chebi_ids(compounds_with_chebi_ids_path)
+
+    print("[WIKIDATA] Adding taxon and taxon_name columns...")
+    add_taxon_and_taxon_names(
+        compounds_with_chebi_ids_path,
+        compounds_with_chebi_ids_path,
+    )
+
+    print("[WIKIDATA] Filtering to Homo sapiens compounds...")
+    keep_homo_sapiens_compounds(
+        compounds_with_chebi_ids_path,
+        homo_sapiens_output_path,
+    )
+    count_chebi_ids(homo_sapiens_output_path)
+
+    print("[WIKIDATA] Output creation complete. Created files:")
+    print(f"  - {compounds_with_chebi_ids_path}")
+    print(f"  - {homo_sapiens_output_path}")
+
 if __name__ == "__main__":
     
     task = count_chebi_ids 
-    # options: download_wikidata_lotus, count_human_entries, print_summary, find_top_n_duplicate_human_compounds, connect_smiles_to_chebi_ids, add_taxon_and_taxon_names, keep_homo_sapiens_compounds, count_chebi_ids
+    # options: download_wikidata_lotus, count_human_entries, print_summary, find_top_n_duplicate_human_compounds, connect_smiles_to_chebi_ids, add_taxon_and_taxon_names, keep_homo_sapiens_compounds, count_chebi_ids, create_wikidata_output_files
 
     if task == download_wikidata_lotus:
         download_wikidata_lotus()
@@ -314,6 +356,8 @@ if __name__ == "__main__":
     elif task == count_chebi_ids:
         input_file_path = "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens.tsv"
         count_chebi_ids(input_file_path)
+    elif task == create_wikidata_output_files:
+        create_wikidata_output_files()
     else:
         print("Invalid task specified.")
         

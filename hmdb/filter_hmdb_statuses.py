@@ -82,7 +82,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
+def filter_hmdb_statuses_main() -> None:
     args = build_argument_parser().parse_args()
     input_rows, kept_rows = filter_hmdb_extract_by_status(
         input_file=args.input_file,
@@ -94,4 +94,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    filter_hmdb_statuses_main()

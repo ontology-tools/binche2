@@ -10,7 +10,7 @@ The web application is available at https://binche2.hastingslab.org/.
 The web application is hosted at https://binche2.hastingslab.org/. To run calculations locally, execute `website/app.py`. Note that all necessary data files must be generated beforehand for local execution (as described in the [Workflow](#workflow) section below).
 
 ### Study Set
-On the home page, enter your study set as ChEBI IDs (one per line), as shown in the example. You can optionally provide weights for each compound (tab or space-separated). Instead of ChEBI IDs, SMILES can be used to represent a molecular entity. If a SMILES string cannot be found in the ChEBI ontology, it's predicted direct parent classes will be used for enrichment calculations. The parent predictions are made with [Chebifier](https://chebifier.hastingslab.org/).
+On the home page, enter your study set as ChEBI IDs (one per line), as shown in the example. You can optionally provide weights for each compound (tab or space-separated). Instead of ChEBI IDs, SMILES can be used to represent a molecular entity. If a SMILES string cannot be found in the ChEBI ontology, it's predicted direct parent classes can be used for enrichment calculations. The parent predictions are made with [Chebifier](https://chebifier.hastingslab.org/).
 
 Then specify the target of enrichment:
 
@@ -37,8 +37,10 @@ If you manually choose which pruning strategies to apply, they will be implement
 * **Plain Enrichment Pruning Strategy:** The pre-loop phase applies the high p-value branch pruner (with a threshold of 0.05), the linear branch collapser pruner (with n = 0), and the root children pruner (levels = 2). The loop phase applies the high p-value branch pruner (with a threshold of 0.05), the linear branch collapser pruner (with n = 0), and the zero-degree vertex pruner. Benjamini-Hochberg is used as the p-value correction method.
 
 ### Calculations
+For multiple hypothesis testing correction, p-value correction methods are available.
+To perform enrichment analysis calculations, Fisher's exact test is used for p-value calculations. For weighted enrichment analysis however, a SaddleSum method is used. All weights must be real and positive numbers.
 
-To perform enrichment analysis calculations, Fisher's exact test is used for P-value calculations. For weighted enrichment analysis however, a SaddleSum method is used. All weights must be real and positive numbers.
+Have used code (translated from c to python) from https://ftp.ncbi.nlm.nih.gov/pub/qmbpmn/SaddleSum/src/, version [SaddleSum-standalone-1.2.2.tar.gz](https://ftp.ncbi.nlm.nih.gov/pub/qmbpmn/SaddleSum/src/SaddleSum-standalone-1.2.2.tar.gz) 2010-08-11 17:55  1.3M
 
 ### The Graph
 
@@ -56,6 +58,11 @@ The graph will initially show only the most relevant branches. This means that a
 
 There are options to choose the layout of the graph, which nodes are shown, and how to export it. Note that if you change the target of enrichment or pruning options under Settings, all calculations will run again. 
 
+## Human background
+TODO: add more here
+
+Compounds in both datasets were mapped to ChEBI leaf classes to serve as a background for enrichment. Where a ChEBI identifier was already present, it was used directly. For compounds lacking a ChEBI identifier, matching was attempted first via InChIKey lookup against the ChEBI leaf classes, and subsequently via SMILES submission to the Chebifier API, which performs both exact lookup and parent-class classification. For compounds resolved only to a parent class rather than a leaf, the deepest class in the ChEBI hierarchy was retained to avoid introducing overly broad annotations. Where a matched ChEBI ID corresponded to a non-leaf class in the ontology, it was expanded to its leaf descendants; classes with more than 150 leaf descendants were excluded to prevent high-level classes from disproportionately inflating the background. The resulting set of leaf classes were used to form the narrow background used in the enrichment analysis.
+
 ## Workflow
 
 #### 0. UV environment
@@ -64,7 +71,7 @@ A uv environment with the following installations was used:
 ```uv pip install py-horned-owl rdkit networkx matplotlib pandas tqdm flask flask_sqlalchemy scipy requests```
 
 #### 1. Load ChEBI
-Download and load the ChEBI ontology by running `load_chebi.py`. In the script, the OWL file is downloaded from https://ftp.ebi.ac.uk/pub/databases/chebi/ontology/chebi.owl and cached as `data/chebi.owl`. Re-running the script will not re-download the file if it already exists; delete `data/chebi.owl` if you want to attain a newer version. The version currently used in the webapplication was updated 2025.10.09.
+Download and load the ChEBI ontology by running `load_chebi.py`. In the script, the OWL file is downloaded from https://ftp.ebi.ac.uk/pub/databases/chebi/ontology/chebi.owl and cached as `data/chebi.owl`. Re-running the script will not re-download the file if it already exists; delete `data/chebi.owl` if you want to attain a newer version. The version used in the webapplication is automatically updated on the 1st of every month.
 
 #### 2. Remove leaf classes and save maps
 To remove leaf classes with SMILES from the ontology, use `pruning_smiles.py`.
@@ -130,8 +137,54 @@ First (only needed once), run task *"build_class_to_leaf_map"* in `pre_fishers_c
 
 Enrichment calculations can be run in `fishers_calculations.py`, but this is easiest done via the web application. Either use the website link (easiest since no preparation steps to obtain all the necessary files are needed) or run `website/app.py` locally.
 
+#### 6. Needed for human dataset
+1. Extract Lotus compunds and crate files with create_wikidata_output_files() in `wikidata/get_wikidata_lotus.py`
 
+Files created:
 
+data/wikidata/created/compounds_with_chebi_ids.tsv
+
+data/wikidata/created/compounds_with_chebi_ids_homo_sapiens.tsv
+- To be used in later steps
+
+2. Extract HMDB compunds and create files using create_hmdb_output_file() [or extract_hmdb_to_file if importes] in `hmdb/extract_hmdb.py`. run using `jobs/run_extract_hmdb.sh` or 
+
+OBSERVE howevere that `data/hmdb_metabolites.xml` is needed for the function to work and is downloaded from https://hmdb.ca/downloads. The XML file named 'All Metabolites' from 2021-11-02 was used. 
+
+Output: 
+- hmdb_metabolites_extract.tsv
+
+3. `hmdb/filter_hmdb_statuses.py` needs the tsv file created in the previous step for filtering to only keep compunds with status "quantified" and "detected" using filter_hmdb_statuses_main()
+
+Output: data/hmdb_metabolites_extract_quantified_detected.tsv
+
+4. `wikidata/find_missing_chebis.py` (run via `jobs/run_find_missing_chebis.sh`) find missing CHEBI IDs for the lotus and hmdb files by running main_find_missing_chebis(source) where source is either "wikidata" or "hmdb". Alternatively run run_find_missing_chebis("hmdb"). This function is safer to import.
+
+CCHEBI ID matches to the CHEBI background are attempted in this order
+
+- direct ChEBI matches (Lotus)
+- direct SMILES matches
+- Inchikey matches
+- Chebifier
+
+Output (depending on chosen source):
+- "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens_updatedchebis.tsv"
+- "data/hmdb_metabolites_extract_quantified_detected_updatedchebis.tsv"
+
+5. In `wikidata/combine_human_datasets.py`, the output sources from the previous step are combined with combine_datasets(). If no CHEBI ID exists, the row is dropped. 
+
+Output:
+"data/combined_hmdb_wikidata.tsv"
+
+6. Create a file with the human leaf classes in `wikidata/narrow_background_fishers.py` with gather_narrow_leaves(). 
+
+Files needed:
+human_entities_tsv = "data/combined_hmdb_wikidata.tsv"
+leaves_csv = "data/removed_leaf_classes_with_smiles.csv"
+class_to_leaf_map = "data/class_to_leaf_descendants_map.json"
+
+Output:
+human_leaves_json = "data/human_entities_leaves.json" 
 
 
 

@@ -14,10 +14,91 @@ import time
 import glob
 import uuid
 import requests
+from rdkit import Chem
+from rdkit.Chem import inchi
 
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # Replace with a secure secret key
+
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+LOCAL_LOOKUP_FILE = os.path.join(BASE_DIR, 'data', 'removed_leaf_classes_with_inchikeys.csv')
+
+
+def _clean_lookup_value(value):
+    if value is None:
+        return ''
+    return str(value).strip().strip('"')
+
+
+def _normalize_chebi_id(raw_value):
+    value = _clean_lookup_value(raw_value)
+    if not value:
+        return ''
+
+    if value.startswith('http://purl.obolibrary.org/obo/CHEBI_'):
+        value = value.rsplit('/', 1)[-1]
+
+    if value.startswith('CHEBI:'):
+        return value.replace(':', '_', 1)
+
+    if value.startswith('CHEBI_'):
+        return value
+
+    if value.isdigit():
+        return f'CHEBI_{value}'
+
+    return value
+
+
+def _load_local_smiles_and_inchikey_maps():
+    smiles_to_chebi = {}
+    inchikey_to_chebi = {}
+
+    with open(LOCAL_LOOKUP_FILE, 'r', encoding='utf-8', newline='') as handle:
+        reader = csv.DictReader(handle)
+        fieldnames = reader.fieldnames or []
+
+        smiles_column = None
+        inchikey_column = None
+        iri_column = None
+
+        for candidate in ('SMILES', 'smiles'):
+            if candidate in fieldnames:
+                smiles_column = candidate
+                break
+
+        for candidate in ('InChIKey', 'InChIkey', 'inchikey', 'InChIKEY'):
+            if candidate in fieldnames:
+                inchikey_column = candidate
+                break
+
+        for candidate in ('IRI', 'iri'):
+            if candidate in fieldnames:
+                iri_column = candidate
+                break
+
+        if smiles_column is None or iri_column is None:
+            raise KeyError(
+                f"{LOCAL_LOOKUP_FILE} must contain SMILES and IRI columns to build local lookup maps"
+            )
+
+        for row in reader:
+            chebi_id = _normalize_chebi_id(row.get(iri_column))
+            smiles = _clean_lookup_value(row.get(smiles_column))
+            inchikey_value = _clean_lookup_value(row.get(inchikey_column)) if inchikey_column else ''
+
+            if smiles and smiles not in smiles_to_chebi:
+                smiles_to_chebi[smiles] = chebi_id
+            if inchikey_value:
+                inchikey_key = inchikey_value.upper()
+                if inchikey_key not in inchikey_to_chebi:
+                    inchikey_to_chebi[inchikey_key] = chebi_id
+
+    return smiles_to_chebi, inchikey_to_chebi
+
+
+LOCAL_SMILES_TO_CHEBI, LOCAL_INCHIKEY_TO_CHEBI = _load_local_smiles_and_inchikey_maps()
 
 def cleanup_old_graph_files(max_age_hours=24):
     """Remove graph files older than max_age_hours"""
@@ -131,11 +212,38 @@ def convert_smiles_to_chebi(smiles_string):
     """Convert a single SMILES string to ChEBI IDs. Returns a tuple (chebi_ids_list, was_resolved)."""
     chebi_ids = []
     was_resolved = False
+    cleaned_smiles = _clean_lookup_value(smiles_string)
+
+    # First try a direct SMILES lookup against the local leaf-class table.
+    local_chebi_id = LOCAL_SMILES_TO_CHEBI.get(cleaned_smiles)
+    if local_chebi_id:
+        chebi_ids.append(local_chebi_id.replace('_', ':', 1))
+        was_resolved = True
+        print(f"Found local ChEBI ID from exact SMILES match: {local_chebi_id} for SMILES {cleaned_smiles}")
+        return chebi_ids, was_resolved
+
+    # If no direct SMILES match exists, try InChIKey -> ChEBI using RDKit to
+    # compute the InChIKey for the submitted SMILES.
+    try:
+        mol = Chem.MolFromSmiles(cleaned_smiles)
+        if mol is not None:
+            user_inchikey = inchi.MolToInchiKey(mol).upper()
+            local_chebi_id = LOCAL_INCHIKEY_TO_CHEBI.get(user_inchikey)
+            if local_chebi_id:
+                chebi_ids.append(local_chebi_id.replace('_', ':', 1))
+                was_resolved = True
+                print(
+                    f"Found local ChEBI ID from InChIKey match: {local_chebi_id} "
+                    f"for SMILES {cleaned_smiles} (InChIKey {user_inchikey})"
+                )
+                return chebi_ids, was_resolved
+    except Exception as error:
+        print(f"Warning: failed to compute InChIKey for SMILES {cleaned_smiles}: {error}")
 
     # Get details from ChEBI lookup to check for a direct match to a ChEBI ID
     response = requests.post("https://chebifier.hastingslab.org/api/details", json={
         "type": "type",
-        "smiles": smiles_string,
+        "smiles": cleaned_smiles,
         "selectedModels": {
             "ChEBI Lookup": True
         }
@@ -148,15 +256,15 @@ def convert_smiles_to_chebi(smiles_string):
         chebi_id = lookup_infotext[0][1].split("CHEBI:")[1].split()[0].rstrip('.')
         chebi_ids.append(f"CHEBI:{chebi_id}")
         was_resolved = True
-        print(f"Found ChEBI ID from lookup: CHEBI:{chebi_id} for SMILES {smiles_string}")
+        print(f"Found ChEBI ID from lookup: CHEBI:{chebi_id} for SMILES {cleaned_smiles}")
     else:
         # Get direct parents from classification
         smiles_option = session.get('smiles_option')
 
         if smiles_option == 'use_parents':
-            print(f"No direct ChEBI ID found from lookup for SMILES {smiles_string}, attempting classification...")
+            print(f"No direct ChEBI ID found from lookup for SMILES {cleaned_smiles}, attempting classification...")
             response = requests.post("https://chebifier.hastingslab.org/api/classify", json={
-                "smiles": smiles_string,
+                "smiles": cleaned_smiles,
                 "ontology": False,
                 "selectedModels": {
                     "ELECTRA (ChEBI50-3STAR)": True,
@@ -171,22 +279,22 @@ def convert_smiles_to_chebi(smiles_string):
                         parent_ids = [f"CHEBI:{parent[0]}" for parent in parent_list]
                         chebi_ids.extend(parent_ids)
                         # Print the parent IDs found
-                        print(f"Found direct parent ChEBI IDs from classification for SMILES {smiles_string}: {parent_ids}")
+                        print(f"Found direct parent ChEBI IDs from classification for SMILES {cleaned_smiles}: {parent_ids}")
                     else:
-                        print(f"No parents found in one of the classification results for SMILES {smiles_string}")
+                        print(f"No parents found in one of the classification results for SMILES {cleaned_smiles}")
                         # print response content for debugging
                         print(f"Classification response content: {response.content}")
                 if chebi_ids:
                     was_resolved = True
                 
-                print(f"Found {len(chebi_ids)} ChEBI IDs from classification for SMILES {smiles_string}")
+                print(f"Found {len(chebi_ids)} ChEBI IDs from classification for SMILES {cleaned_smiles}")
 
         else:
-            print(f"No direct ChEBI ID found from lookup for SMILES {smiles_string}, excluding from analysis.")
+            print(f"No direct ChEBI ID found from lookup for SMILES {cleaned_smiles}, excluding from analysis.")
             
     
     return chebi_ids, was_resolved
-
+ 
 def map_p_value_correction_method(method_name):
     if method_name == 'bonferroni':
         return True, False

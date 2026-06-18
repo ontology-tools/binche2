@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 from load_chebi import load_chebi, load_ontology
 from pruning_smiles import (
@@ -15,6 +16,17 @@ from prepare_role_calculations import (
 )
 from pruning_split_up_structure import identify_structural_vs_functional
 from pre_fishers_calculations import build_class_to_leaf_map
+
+from wikidata.get_wikidata_lotus import create_wikidata_output_files
+from wikidata.get_inchikeys import convert_smiles_file
+from hmdb.extract_hmdb import extract_hmdb_to_file
+from hmdb.filter_hmdb_statuses import filter_hmdb_statuses_main
+from wikidata.find_missing_chebis import run_find_missing_chebis
+from wikidata.combine_human_datasets import combine_datasets
+from wikidata.narrow_background_fishers import gather_narrow_leaves
+
+
+
 import time
 
 start_time = time.time()
@@ -272,10 +284,87 @@ if __name__ == "__main__":
         class_to_leaf_output_file,
     )
 
+    # Copy HMDB XML to data_new before folder rename
+    print("Copying HMDB XML to temporary data folder...")
+    hmdb_xml_src = "data/hmdb_metabolites.xml"
+    hmdb_xml_dst = "data_new/hmdb_metabolites.xml"
+    print(f"Copying HMDB XML to data_new...")
+    if os.path.exists(hmdb_xml_src):
+        shutil.copy2(hmdb_xml_src, hmdb_xml_dst)
+        print(f"Copied {hmdb_xml_src} to {hmdb_xml_dst}")
+    else:
+        raise FileNotFoundError(f"{hmdb_xml_src} not found. Please download it before running.")
+    
+
     ### Finalize folder structure: rename old data and move data_new to data
     print("Finalizing folder structure...")
     _run_stage("finalize_folder_structure", stage_timings, finalize_folder_structure)
 
+    ### Convert SMILES to InChIKeys for the removed leaf classes (needed by find_missing_chebis and the website)
+    print("Generating InChIKeys for removed leaf classes...")
+    _run_stage(
+        "convert_smiles_to_inchikeys",
+        stage_timings,
+        convert_smiles_file,
+        "data/removed_leaf_classes_with_smiles.csv",
+        "data/removed_leaf_classes_with_inchikeys.csv",
+    )
+
+    print("Creating Wikidata output files...")
+    _run_stage(
+        "create_wikidata_output_files",
+        stage_timings,
+        create_wikidata_output_files,
+        include_download=True,
+    )
+
+    print("Creating HMDB output file...")
+    _run_stage(
+        "create_hmdb_output_file",
+        stage_timings,
+        extract_hmdb_to_file,
+        "data/hmdb_metabolites.xml",
+        "data/hmdb_metabolites_extract.tsv",
+    )
+
+    print("Filtering HMDB statuses...")
+    _run_stage(
+        "filter_hmdb_statuses",
+        stage_timings,
+        filter_hmdb_statuses_main,
+    )
+
+    print("Finding missing ChEBI IDs for Wikidata...")
+    _run_stage(
+        "find_missing_chebis_wikidata",
+        stage_timings,
+        run_find_missing_chebis,
+        "wikidata",
+    )
+
+    print("Finding missing ChEBI IDs for HMDB...")
+    _run_stage(
+        "find_missing_chebis_hmdb",
+        stage_timings,
+        run_find_missing_chebis,
+        "hmdb",
+    )
+
+    print("Combining human datasets...")
+    _run_stage(
+        "combine_datasets",
+        stage_timings,
+        combine_datasets,
+    )
+
+    print("Gathering narrow leaf classes...")
+    _run_stage(
+        "gather_narrow_leaves",
+        stage_timings,
+        gather_narrow_leaves,
+    )
+
+   
     print("All files created successfully!")
     end_time = time.time()
     elapsed_time = end_time - start_time

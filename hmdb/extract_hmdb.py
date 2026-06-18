@@ -72,6 +72,12 @@ def _get_chebi_ids(metabolite: ET.Element) -> str:
 	return ";".join(dict.fromkeys(chebi_ids))
 
 
+def _get_inchikey(metabolite: ET.Element) -> str:
+	"""Return the first non-empty InChIKey for a metabolite, or empty string."""
+	# inchikey appears as a direct child <inchikey> under metabolite in HMDB XML
+	return _clean_text(metabolite.findtext("hmdb:inchikey", default="", namespaces=NS))
+
+
 def extract_hmdb_metabolites(xml_file: str, allow_truncated: bool = True) -> Iterator[dict[str, str]]:
 	"""Extract flat metabolite rows from the HMDB XML file."""
 
@@ -81,6 +87,7 @@ def extract_hmdb_metabolites(xml_file: str, allow_truncated: bool = True) -> Ite
 			"name": _get_text(metabolite, "hmdb:name"),
 			"chebi_id": _get_chebi_ids(metabolite),
 			"smiles": _get_text(metabolite, "hmdb:smiles"),
+			"inchikey": _get_inchikey(metabolite),
 			"status": _get_text(metabolite, "hmdb:status"),
 		}
 
@@ -100,7 +107,7 @@ def write_hmdb_table(rows: Iterable[dict[str, str]], output_file: str, format: s
 	with output_path.open("w", encoding="utf-8", newline="") as handle:
 		writer = csv.DictWriter(
 			handle,
-			fieldnames=["hmdb_id", "name", "chebi_id", "smiles", "status"],
+			fieldnames=["hmdb_id", "name", "chebi_id", "smiles", "inchikey", "status"],
 			delimiter=delimiter,
 		)
 		writer.writeheader()
@@ -179,7 +186,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
 	return parser
 
 
-def main() -> None:
+def create_hmdb_output_file() -> None:
 	args = build_argument_parser().parse_args()
 	try:
 		extract_hmdb_to_file(
@@ -194,4 +201,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-	main()
+	create_hmdb_output_file()

@@ -75,7 +75,7 @@ def filter_chebifier_parents(parent_chebis, chebi_parent_map_json):
 
     return chosen_parents
 
-def gather_narrow_leaves(human_entities_tsv, leaves_csv, class_to_leaf_map, output_json, chebi_parent_map_json):
+def gather_narrow_leaves(human_entities_tsv = "data/combined_hmdb_wikidata.tsv", leaves_csv = "data/chebi_leaves.csv", class_to_leaf_map = "data/chebi_class_to_leaf_map.json", output_json = "data/narrow_leaves.json", chebi_parent_map_json = "data/chebi_parent_map.json"):
     """Build narrow background leaves from human entities TSV.
 
     Workflow:

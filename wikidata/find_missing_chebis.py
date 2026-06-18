@@ -3,22 +3,7 @@ import re
 import requests
 import pandas as pd
 import time
-
-
-SOURCE_PRESETS = {
-    "wikidata": {
-        "input": "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens.tsv",
-        "output": "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens_updatedchebis.tsv",
-        "smiles_columns": ["canonicalSmiles", "isomericSmiles"],
-        "chebi_column": "chebi_id",
-    },
-    "hmdb": {
-        "input": "data/hmdb_metabolites_extract_quantified_detected.tsv",
-        "output": "data/hmdb_metabolites_extract_quantified_detected_updatedchebis.tsv",
-        "smiles_columns": ["smiles"],
-        "chebi_column": "chebi_id",
-    },
-}
+from typing import Optional
 
 
 def normalize_chebi_id(raw_value):
@@ -170,6 +155,32 @@ def find_missing_chebis(compounds_file, output_file_path=None, smiles_columns=No
     missing_indices = df.index[~chebi_existing_mask]
     print(f"Rows with missing ChEBI IDs: {len(missing_indices)}")
 
+    # Build optional InChIKey -> ChEBI IRI map from removed leaf classes file.
+    inchikey_map = {}
+    try:
+        removed_inchikeys = pd.read_csv("data/removed_leaf_classes_with_inchikeys.csv")
+        # possible column names for InChIKey: InChIKey, InChIkey, inchikey
+        inchikey_col = None
+        for c in ["InChIKey", "InChIkey", "inchikey", "InChIKEY"]:
+            if c in removed_inchikeys.columns:
+                inchikey_col = c
+                break
+        if inchikey_col is not None and "IRI" in removed_inchikeys.columns:
+            for _, r in removed_inchikeys.dropna(subset=[inchikey_col]).iterrows():
+                key = str(r[inchikey_col]).strip()
+                if key:
+                    # map InChIKey -> normalized CHEBI id (from IRI)
+                    iri = r.get("IRI")
+                    if pd.notna(iri) and iri:
+                        inchikey_map[key] = normalize_chebi_id(iri)
+        if inchikey_map:
+            print(f"Loaded {len(inchikey_map)} InChIKey -> ChEBI mappings from removed_leaf_classes_with_inchikeys.csv")
+    except FileNotFoundError:
+        pass
+
+    # Counter for how many rows were resolved via InChIKey mapping.
+    inchikey_match_count = 0
+
     for i, idx in enumerate(missing_indices, start=1):
         smiles_candidates = []
         for smiles_column in selected_smiles_columns:
@@ -177,6 +188,21 @@ def find_missing_chebis(compounds_file, output_file_path=None, smiles_columns=No
             for candidate in candidates:
                 if candidate not in smiles_candidates:
                     smiles_candidates.append(candidate)
+
+        # If an InChIKey column exists in the input and maps to a ChEBI, use it first.
+        inchikey_used = False
+        for colname in ("InChIKey", "InChIkey", "inchikey", "inchiKey"):
+            if colname in df.columns:
+                ik = str(df.at[idx, colname]).strip()
+                if ik and ik in inchikey_map:
+                    df.at[idx, chebi_column] = inchikey_map[ik]
+                    df.at[idx, "chebi_source"] = "found_via_inchikey"
+                    inchikey_match_count += 1
+                    inchikey_used = True
+                break
+
+        if inchikey_used:
+            continue
 
         if not smiles_candidates:
             df.at[idx, "chebi_source"] = "unresolved"
@@ -228,18 +254,77 @@ def find_missing_chebis(compounds_file, output_file_path=None, smiles_columns=No
     still_missing_mask = df[chebi_column].isna() | (df[chebi_column].astype(str).str.strip() == "")
     unresolved_count = int(still_missing_mask.sum())
 
+    print(f"Resolved via InChIKey mapping: {inchikey_match_count}")
+
     print(f"Found directly: {direct_count}")
     print(f"Found using parents: {parents_count}")
     print(f"Still unresolved (no chebi_id): {unresolved_count}")
 
     return df
 
-if __name__ == "__main__":
+
+def run_find_missing_chebis(
+    source: str = "wikidata",
+    compounds_file: Optional[str] = None,
+    output_file: Optional[str] = None,
+    smiles_columns: Optional[list] = None,
+    chebi_column: Optional[str] = None,
+):
+    """Programmatic wrapper around :func:`find_missing_chebis`.
+
+    Parameters mirror the CLI presets. This avoids argparse when calling
+    from other scripts (e.g., `create_files.py`).
+    """
+    SOURCE_PRESETS = {
+        "wikidata": {
+            "input": "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens.tsv",
+            "output": "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens_updatedchebis.tsv",
+            "smiles_columns": ["canonicalSmiles", "isomericSmiles"],
+            "chebi_column": "chebi_id",
+        },
+        "hmdb": {
+            "input": "data/hmdb_metabolites_extract_quantified_detected.tsv",
+            "output": "data/hmdb_metabolites_extract_quantified_detected_updatedchebis.tsv",
+            "smiles_columns": ["smiles"],
+            "chebi_column": "chebi_id",
+        },
+    }
+
+    if source not in SOURCE_PRESETS:
+        raise ValueError(f"Unknown source preset: {source!r}")
+
+    preset = SOURCE_PRESETS[source]
+    compounds_file = compounds_file if compounds_file is not None else preset["input"]
+    output_file = output_file if output_file is not None else preset["output"]
+    smiles_columns = smiles_columns if smiles_columns is not None else preset["smiles_columns"]
+    chebi_column = chebi_column if chebi_column is not None else preset["chebi_column"]
+
+    print(f"Running find_missing_chebis programmatically: source={source}, input={compounds_file}, output={output_file}")
+    return find_missing_chebis(
+        compounds_file,
+        output_file,
+        smiles_columns=smiles_columns,
+        chebi_column=chebi_column,
+    )
+
+    
+def main_find_missing_chebis(source):
     start_time = time.time()
 
-    # Quick source switch when editing the script directly.
-    # Choices are "hmdb" and "wikidata".
-    source = "wikidata"
+    SOURCE_PRESETS = {
+    "wikidata": {
+        "input": "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens.tsv",
+        "output": "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens_updatedchebis.tsv",
+        "smiles_columns": ["canonicalSmiles", "isomericSmiles"],
+        "chebi_column": "chebi_id",
+    },
+    "hmdb": {
+        "input": "data/hmdb_metabolites_extract_quantified_detected.tsv",
+        "output": "data/hmdb_metabolites_extract_quantified_detected_updatedchebis.tsv",
+        "smiles_columns": ["smiles"],
+        "chebi_column": "chebi_id",
+    },
+    }
 
     parser = argparse.ArgumentParser(
         description="Fill missing ChEBI IDs using SMILES for Wikidata/HMDB-style TSV files.",
@@ -298,3 +383,6 @@ if __name__ == "__main__":
     print(f"Total runtime: {elapsed_seconds:.2f} seconds ({elapsed_minutes:.2f} minutes)")
 
 
+if __name__ == "__main__":
+    source = "wikidata"  # or "hmdb"
+    main_find_missing_chebis(source)
