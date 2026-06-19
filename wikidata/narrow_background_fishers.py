@@ -184,11 +184,18 @@ def gather_narrow_leaves(compounds_tsv = "data/combined_hmdb_wikidata.tsv", leav
 
 """Enrichment Calcultaions"""
 
-def get_studyset_leaves_narrow(studyset_list, human_entities_leaves_json, leaves_csv, class_to_leaf_map):
+def get_studyset_leaves_narrow(studyset_list, human_entities_leaves_json, leaves_csv, class_to_leaf_map, expand_background=True):
     """Get leaf descendants for the input classes and track leaves outside the narrow background.
 
     `human_entities_leaves_json` provides the narrow background leaf set.
     `leaves_csv` is used to recognize leaves in the broader CHEBI leaf universe.
+
+    If `expand_background` is False, leaves outside the narrow background are
+    excluded from the returned study set entirely (rather than being kept on
+    the study side while absent from the background), so every leaf counted
+    in the study set is guaranteed to also exist in the background it's
+    tested against. `leaves_to_expand_background`/`parents_to_expand_background`
+    are still returned in that case, for reporting which leaves were excluded.
     """
 
     # Normalize study set IDs to full IRIs
@@ -228,6 +235,10 @@ def get_studyset_leaves_narrow(studyset_list, human_entities_leaves_json, leaves
                     print(f"Leaf descendant {leaf} of class {cls} is not in the narrow background; marking for expansion.")
                     leaves_to_expand_background.add(leaf)
                     parents_to_expand_background.add(cls)
+
+    if not expand_background and leaves_to_expand_background:
+        print(f"Background expansion disabled: excluding {len(leaves_to_expand_background)} leaves outside the narrow background from the analysis.")
+        studyset_leaves -= leaves_to_expand_background
 
     return list(studyset_leaves), leaves_to_expand_background, parents_to_expand_background
 
@@ -424,6 +435,7 @@ def run_narrow_background_enrichment_analysis(studyset_list,
         narrow_background_leaves_json,
         removed_leaves_full_csv,
         class_to_leaf_map_file,
+        expand_background,
     )
     #print(f"Study set leaves: {studyset_leaves}")
     
@@ -624,6 +636,7 @@ def run_narrow_background_enrichment_analysis_plain_enrich_pruning_strategy(
         narrow_background_leaves_json,
         removed_leaves_full_csv,
         class_to_leaf_map_file,
+        expand_background,
     )
     print(f"Study set leaves: {studyset_leaves}")
 

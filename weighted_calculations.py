@@ -691,7 +691,7 @@ def _setup_weighted_narrow_analysis(weights_dict, classification,
     studyset_list = list(normalized_weights_dict.keys())
 
     studyset_leaves, leaves_to_expand_background, parents_to_expand_background = get_studyset_leaves_narrow(
-        studyset_list, narrow_background_leaves_json, removed_leaves_csv, class_to_leaf_map
+        studyset_list, narrow_background_leaves_json, removed_leaves_csv, class_to_leaf_map, expand_background
     )
     print(f"Study set leaves: {len(studyset_leaves)}")
 

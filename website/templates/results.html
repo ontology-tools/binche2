@@ -82,9 +82,23 @@
     <li>{{ leaf.split('/')|last|replace('_', ':') }}</li>
 {% endfor %}
 </ul>
+{% elif not expand_background and leaves_to_expand_background %}
+<p class="muted-log"><strong>Leaves excluded (outside chosen background, expansion disabled):</strong></p>
+<ul class="muted-log" style="margin-left: 20px;">
+{% for leaf in leaves_to_expand_background %}
+    <li>{{ leaf.split('/')|last|replace('_', ':') }}</li>
+{% endfor %}
+</ul>
 {% endif %}
 {% if expand_background and parents_to_expand_background %}
 <p class="muted-log"><strong>Parent classes requiring background expansion:</strong></p>
+<ul class="muted-log" style="margin-left: 20px;">
+{% for parent in parents_to_expand_background %}
+    <li>{{ parent.split('/')|last|replace('_', ':') }}</li>
+{% endfor %}
+</ul>
+{% elif not expand_background and parents_to_expand_background %}
+<p class="muted-log"><strong>Parent classes with leaves excluded (outside chosen background, expansion disabled):</strong></p>
 <ul class="muted-log" style="margin-left: 20px;">
 {% for parent in parents_to_expand_background %}
     <li>{{ parent.split('/')|last|replace('_', ':') }}</li>
