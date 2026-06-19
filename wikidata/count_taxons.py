@@ -37,3 +37,4 @@ if __name__ == "__main__":
 
     class_file_at = 'data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana.tsv'
     count_classes_in_file(class_file_at)
+    

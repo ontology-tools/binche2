@@ -260,8 +260,8 @@
             
             node.qtip({
                 content: `
-                    <b>${node.data('label')}</b><br>
-                    p-value: ${formattedPValue}<br> 
+                    <b>${node.data('label').replace('CHEBI_', 'CHEBI:')}</b><br>
+                    p-value: ${formattedPValue}<br>
                     corr. p-value: ${formattedPValueCorr}
                 `,
                 show: {event: 'mouseover'},
