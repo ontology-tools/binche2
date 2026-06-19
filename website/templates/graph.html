@@ -20,10 +20,17 @@
 {% block nav_items %}
 
 <li class="nav-item dropdown">
-    <a class="nav-link dropdown-toggle" href="#" id="exportDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    <a class="nav-link dropdown-toggle" href="#" id="exportDropdown" role="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
         <i class="fa fa-download"></i> Export
     </a>
     <ul class="dropdown-menu" aria-labelledby="exportDropdown">
+        <li class="px-3 py-1">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="exportIncludeLegend" checked>
+                <label class="form-check-label" for="exportIncludeLegend">Include scale</label>
+            </div>
+        </li>
+        <li><hr class="dropdown-divider"></li>
         <li><a href="#" class="dropdown-item export-option" data-format="png">Export as PNG</a></li>
         <li><a href="#" class="dropdown-item export-option" data-format="jpeg">Export as JPEG</a></li>
     </ul>
@@ -325,33 +332,128 @@
 
         // Main menu actions
 
-        // Export graph
+        // Computes the legend's layout (sizes, fonts, text) relative to the
+        // exported image's height, instead of fixed pixel sizes — so the legend
+        // stays proportional whether the exported graph is tiny or huge.
+        function computeLegendLayout(imgHeight) {
+            const titleText = colourScaleMode === 'relative' ? 'Significance (relative)' : 'Significance';
+            const highLabel = `High (p ≤ ${Math.pow(10, -maxExponent).toExponential(1)})`;
+            const lowLabel = 'Low';
+            const captionText = '(−log₁₀ scale)';
+
+            const gradHeight = Math.max(70, Math.min(180, imgHeight * 0.22));
+            const gradWidth = gradHeight * 0.15;
+            const titleFontSize = gradHeight * 0.1;
+            const labelFontSize = gradHeight * 0.085;
+            const gap = gradHeight * 0.08;
+            const gradTop = titleFontSize + gap;
+
+            // Use a throwaway canvas just to measure text widths before sizing the real one.
+            const measureCtx = document.createElement('canvas').getContext('2d');
+            measureCtx.font = `${titleFontSize}px sans-serif`;
+            const titleWidth = measureCtx.measureText(titleText).width;
+            measureCtx.font = `bold ${labelFontSize}px sans-serif`;
+            const labelsWidth = Math.max(measureCtx.measureText(highLabel).width, measureCtx.measureText(lowLabel).width);
+            measureCtx.font = `${labelFontSize}px sans-serif`;
+            const captionWidth = measureCtx.measureText(captionText).width;
+
+            return {
+                titleText, highLabel, lowLabel, captionText,
+                gradWidth, gradHeight, gradTop, titleFontSize, labelFontSize, gap,
+                width: Math.ceil(Math.max(titleWidth, gradWidth + gap + labelsWidth, captionWidth)),
+                height: Math.ceil(gradTop + gradHeight + gap + labelFontSize),
+            };
+        }
+
+        // Draws the same colour-legend shown on screen (#color-legend) onto a canvas
+        // context, since cy.png()/cy.jpeg() only rasterize the graph itself.
+        function drawLegend(ctx, x, y, layout) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.textBaseline = 'top';
+
+            // Not bold — matches the <h4> heading weight used on the website (#color-legend h4).
+            ctx.font = `${layout.titleFontSize}px sans-serif`;
+            ctx.fillStyle = '#000';
+            ctx.fillText(layout.titleText, 0, 0);
+
+            // Gradient bar (matches .legend-gradient in styles.css: high significance at top)
+            const gradient = ctx.createLinearGradient(0, layout.gradTop, 0, layout.gradTop + layout.gradHeight);
+            gradient.addColorStop(0, 'rgba(202, 57, 0, 1)');
+            gradient.addColorStop(1, 'rgba(202, 57, 0, 0.1)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, layout.gradTop, layout.gradWidth, layout.gradHeight);
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(0, layout.gradTop, layout.gradWidth, layout.gradHeight);
+
+            // Labels next to the gradient bar (bold, matches .legend-labels in styles.css)
+            ctx.font = `bold ${layout.labelFontSize}px sans-serif`;
+            ctx.fillStyle = '#000';
+            ctx.fillText(layout.highLabel, layout.gradWidth + layout.gap, layout.gradTop);
+            ctx.fillText(layout.lowLabel, layout.gradWidth + layout.gap, layout.gradTop + layout.gradHeight - layout.labelFontSize);
+
+            // Caption below
+            ctx.font = `${layout.labelFontSize}px sans-serif`;
+            ctx.fillStyle = '#6c757d';
+            ctx.fillText(layout.captionText, 0, layout.gradTop + layout.gradHeight + layout.gap);
+
+            ctx.restore();
+        }
+
+        // Export graph: optionally composites the on-screen legend onto the exported
+        // image, alongside the full graph (cy's {full:true} captures the whole graph
+        // regardless of current pan/zoom, which a DOM screenshot would not).
+        function exportGraphWithLegend(format) {
+            const scale = 2;
+            const includeLegend = document.getElementById('exportIncludeLegend').checked;
+            const rawData = format === 'jpeg'
+                ? cy.jpeg({ full: true, scale, quality: 0.9 })
+                : cy.png({ full: true, scale });
+
+            const downloadDataUrl = (dataUrl) => {
+                const link = document.createElement('a');
+                link.href = dataUrl;
+                link.download = `graph.${format}`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            if (!includeLegend) {
+                downloadDataUrl(rawData);
+                return;
+            }
+
+            const img = new Image();
+            img.onload = () => {
+                const padding = 16;
+                const layout = computeLegendLayout(img.height);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width + layout.width + padding * 2;
+                canvas.height = Math.max(img.height, layout.height + padding * 2);
+
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+
+                drawLegend(ctx, img.width + padding, padding, layout);
+
+                const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+                const combinedData = format === 'jpeg' ? canvas.toDataURL(mimeType, 0.9) : canvas.toDataURL(mimeType);
+                downloadDataUrl(combinedData);
+            };
+            img.src = rawData;
+        }
+
         document.querySelectorAll('.export-option').forEach(item => {
             item.addEventListener('click', e => {
                 e.preventDefault(); // stop link navigation
-
                 const format = e.target.dataset.format;
-
-                switch(format) {
-                    case 'png':
-                        const pngData = cy.png({full: true, scale: 2});
-                        const link = document.createElement('a');
-                        link.href = pngData;
-                        link.download = 'graph.png';
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        break;
-
-                    case 'jpeg':
-                        const jpegData = cy.jpeg({full: true, scale: 2, quality: 0.9});
-                        const linkJpeg = document.createElement('a');
-                        linkJpeg.href = jpegData;
-                        linkJpeg.download = 'graph.jpeg';
-                        document.body.appendChild(linkJpeg);
-                        linkJpeg.click();
-                        document.body.removeChild(linkJpeg);
-                        break;
+                if (format === 'png' || format === 'jpeg') {
+                    exportGraphWithLegend(format);
                 }
             });
         });
