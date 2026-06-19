@@ -300,11 +300,15 @@ def auto_scale_weights(weights_dict, target_max=1000.0):
     return {k: v * scale for k, v in weights_dict.items()}
 
 
-def _propagate_weights_to_leaves(weights_dict, class_to_leaf_map, removed_leaves_csv):
+def _propagate_weights_to_leaves(weights_dict, class_to_leaf_map, removed_leaves_csv, structural_leaf_ids=None):
     """
     Build weights_with_leaves: expand any non-leaf submitted IDs so their
     leaf descendants inherit the weight. Directly submitted leaves take
     priority over inherited values.
+
+    structural_leaf_ids: if given, leaves mislabeled with a Classification
+    other than 'structural' (a ChEBI ontology error) are excluded, mirroring
+    get_leaves() in fishers_calculations.py.
     Returns weights_with_leaves dict keyed by leaf IRI.
     """
     leaves_df = pd.read_csv(removed_leaves_csv)
@@ -315,7 +319,10 @@ def _propagate_weights_to_leaves(weights_dict, class_to_leaf_map, removed_leaves
     # First pass: propagate non-leaf weights to descendants (take maximum if conflict)
     for cls, weight in weights_dict.items():
         if cls not in leaf_set:
-            for leaf in class_to_leaf_map.get(cls, []):
+            descendants = class_to_leaf_map.get(cls, [])
+            if structural_leaf_ids is not None:
+                descendants = [leaf for leaf in descendants if leaf in structural_leaf_ids]
+            for leaf in descendants:
                 current = weights_with_leaves.get(leaf)
                 if current is None or weight > current:
                     weights_with_leaves[leaf] = weight
@@ -323,22 +330,32 @@ def _propagate_weights_to_leaves(weights_dict, class_to_leaf_map, removed_leaves
     # Second pass: directly submitted leaves always overwrite inherited values
     for cls, weight in weights_dict.items():
         if cls in leaf_set:
+            if structural_leaf_ids is not None and cls not in structural_leaf_ids:
+                print(f"Excluding class {cls}: not classified as 'structural' in ChEBI (likely a mislabeled leaf).")
+                continue
             weights_with_leaves[cls] = weight
 
     return weights_with_leaves
 
 
-def _build_background_weights(weights_with_leaves, removed_leaves_csv):
+def _build_background_weights(weights_with_leaves, removed_leaves_csv, structural_leaf_ids=None):
     """
     Build the full background weight array.
     Every leaf in the background gets its weight from weights_with_leaves
     (if measured) or 0.0 otherwise.
 
+    structural_leaf_ids: if given, restricts the background population to
+    genuine 'structural'-classified leaves, so the population size used
+    inside the SaddleSum statistic matches n_bg_leaves reported elsewhere.
+
     Must be called with weights_with_leaves (post-propagation), not
     the raw weights_dict.
     """
-    leaves_df = pd.read_csv(removed_leaves_csv)
-    all_bg_leaves = list(leaves_df['IRI'].values)
+    if structural_leaf_ids is not None:
+        all_bg_leaves = list(structural_leaf_ids)
+    else:
+        leaves_df = pd.read_csv(removed_leaves_csv)
+        all_bg_leaves = list(leaves_df['IRI'].values)
     return [weights_with_leaves.get(leaf, 0.0) for leaf in all_bg_leaves]
 
 
@@ -417,7 +434,7 @@ def get_weighted_enrichment_values(
     Stores ALL results — BH/Bonferroni correction filters them afterwards,
     exactly as get_enrichment_values does for Fisher.
     """
-    background_weights = _build_background_weights(weights_with_leaves, removed_leaves_csv)
+    background_weights = _build_background_weights(weights_with_leaves, removed_leaves_csv, structural_leaf_ids)
     saddler = _SaddleSum(background_weights)
 
     studyset_leaves_set = set(studyset_leaves)
@@ -520,7 +537,7 @@ def _setup_weighted_analysis(weights_dict, classification,
     print(f"Study set leaves: {len(studyset_leaves)}")
 
     weights_with_leaves = _propagate_weights_to_leaves(
-        normalized_weights_dict, class_to_leaf_map, removed_leaves_csv
+        normalized_weights_dict, class_to_leaf_map, removed_leaves_csv, structural_leaf_ids
     )
     print(f"Weights with leaf propagation: {len(weights_with_leaves)} leaves have weights")
 
