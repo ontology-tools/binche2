@@ -35,6 +35,7 @@ from pre_fishers_calculations import (
     count_removed_leaves,
     count_removed_classes_for_class,
     count_removed_classes_for_roles,
+    get_structural_leaf_ids,
 )
 from multiple_test_corrections import (
     bonferroni_correction,
@@ -409,6 +410,7 @@ def get_weighted_enrichment_values(
     roles_to_leaves_map,
     studyset_ancestors_roles,
     weights_with_leaves,
+    structural_leaf_ids=None,
 ):
     """
     Compute SaddleSum enrichment for every ancestor class (and role class).
@@ -445,6 +447,7 @@ def get_weighted_enrichment_values(
                 _, n_bg_annotated = count_removed_classes_for_class(
                     cls, class_to_leaf_map, classification,
                     class_to_all_roles_map, roles_to_leaves_map,
+                    structural_leaf_ids,
                 )
             else:
                 n_bg_annotated = len(term_leaves)
@@ -505,14 +508,15 @@ def _split_graph_nodes_for_enrichment(graph_nodes, role_nodes):
 def _setup_weighted_analysis(weights_dict, classification,
                              removed_leaves_csv, leaf_to_ancestors_map_file,
                              class_to_leaf_map, class_to_all_roles_map,
-                             roles_to_leaves_map, parent_map_file):
+                             roles_to_leaves_map, parent_map_file,
+                             structural_leaf_ids=None):
     """Extract leaves, propagate weights, find ancestors and roles."""
     normalized_weights_dict = {
         normalize_id(cls): weight for cls, weight in weights_dict.items()
     }
 
     studyset_list = list(normalized_weights_dict.keys())
-    studyset_leaves = get_leaves(studyset_list, removed_leaves_csv, class_to_leaf_map)
+    studyset_leaves = get_leaves(studyset_list, removed_leaves_csv, class_to_leaf_map, structural_leaf_ids)
     print(f"Study set leaves: {len(studyset_leaves)}")
 
     weights_with_leaves = _propagate_weights_to_leaves(
@@ -579,12 +583,15 @@ def run_weighted_enrichment_analysis(
     with open(roles_to_leaves_map_json, 'r') as f:
         roles_to_leaves_map = json.load(f)
 
+    structural_leaf_ids = get_structural_leaf_ids(removed_leaves_csv)
+
     studyset_leaves, weights_with_leaves, studyset_ancestors_all, studyset_ancestors_roles = (
         _setup_weighted_analysis(
             weights_dict, classification,
             removed_leaves_csv, leaf_to_ancestors_map_file,
             class_to_leaf_map, class_to_all_roles_map,
             roles_to_leaves_map, parent_map_file,
+            structural_leaf_ids,
         )
     )
 
@@ -638,6 +645,7 @@ def run_weighted_enrichment_analysis(
         roles_to_leaves_map,
         studyset_ancestors_roles_for_enrichment,
         weights_with_leaves,
+        structural_leaf_ids,
     )
     _print_non_finite_pvalue_diagnostics(enrichment_results, "post-raw-enrichment")
 
@@ -711,12 +719,15 @@ def run_weighted_enrichment_analysis_plain_enrich_pruning_strategy(
     with open(roles_to_leaves_map_json, 'r') as f:
         roles_to_leaves_map = json.load(f)
 
+    structural_leaf_ids = get_structural_leaf_ids(removed_leaves_csv)
+
     studyset_leaves, weights_with_leaves, studyset_ancestors, studyset_ancestors_roles = (
         _setup_weighted_analysis(
             weights_dict, classification,
             removed_leaves_csv, leaf_to_ancestors_map_file,
             class_to_leaf_map, class_to_all_roles_map,
             roles_to_leaves_map, parent_map_file,
+            structural_leaf_ids,
         )
     )
 
@@ -744,6 +755,7 @@ def run_weighted_enrichment_analysis_plain_enrich_pruning_strategy(
         roles_to_leaves_map,
         role_nodes_for_enrichment,
         weights_with_leaves,
+        structural_leaf_ids,
     )
 
     print("Enrichment results (raw):")

@@ -21,12 +21,23 @@ _MISSING_ROLE_WARNING_LIMIT = 5
 _missing_role_warning_count = 0
 _missing_role_warning_suppressed = 0
 
+_structural_leaf_ids_cache = {}
+
+def get_structural_leaf_ids(removed_classes_csv):
+    """
+    Return the set of leaf class IRIs correctly classified as 'structural'.
+    Leaves classified as 'functional' or 'neither' are ChEBI ontology labeling
+    mistakes (a genuine leaf class should only exist under structural), so they
+    are excluded everywhere a background/study leaf set is built.
+    """
+    if removed_classes_csv not in _structural_leaf_ids_cache:
+        removed_classes = pd.read_csv(removed_classes_csv)
+        structural = removed_classes[removed_classes["Classification"] == "structural"]
+        _structural_leaf_ids_cache[removed_classes_csv] = set(structural["IRI"])
+    return _structural_leaf_ids_cache[removed_classes_csv]
+
 def count_removed_leaves(removed_classes_csv):
-    classification = 'structural' # Since 'functional' are errors in CHEBI ontology
-    removed_classes = pd.read_csv(removed_classes_csv)
-    # Count how many classes that are set to "structural"/"functional" as their Classification
-    removed_set = removed_classes[removed_classes["Classification"] == classification]
-    return len(removed_set)
+    return len(get_structural_leaf_ids(removed_classes_csv))
 
 def build_class_to_leaf_map(leaf_to_ancestors_file, class_to_leaf_output_file):
     """ Build a JSON map from each class IRI to ALL its leaf descendants using an existing leaf-to-ancestors map."""
@@ -64,16 +75,19 @@ def build_class_to_leaf_map(leaf_to_ancestors_file, class_to_leaf_output_file):
 
     print(f"Saved class to leaf descendants map with {len(class_to_leaf_json)} classes to {class_to_leaf_output_file}.")
     
-def count_removed_classes_for_class(class_iri, leaf_descendants_map, classification, class_to_all_roles_map, roles_to_leaves_map):
+def count_removed_classes_for_class(class_iri, leaf_descendants_map, classification, class_to_all_roles_map, roles_to_leaves_map, structural_leaf_ids=None):
     """
     Count how many leaf classes are associated with the given class_iri.
-    
+
     Parameters:
         class_iri: The class to check
         leaf_descendants_map: Maps structural classes to their leaf descendants
         classification: "structural", "functional", or "full"
         roles_to_leaves_map: Maps role classes to their associated leaves
-    
+        structural_leaf_ids: If given, leaf descendants are restricted to this
+            set (the genuine 'structural'-classified leaves), excluding any
+            leaf classes mislabeled with another Classification in ChEBI
+
     Returns:
         leaves: Set of leaf class IRIs
         n_leaves: Count of leaves
@@ -86,8 +100,8 @@ def count_removed_classes_for_class(class_iri, leaf_descendants_map, classificat
     leaves = set()
 
     if classification in ["structural", "full"]:
-        
-        if str(class_iri) not in leaf_descendants_map: 
+
+        if str(class_iri) not in leaf_descendants_map:
             print(f"⚠️ Class {class_iri} is not found in map file.")
             return 0, 0
         elif len(leaf_descendants_map[str(class_iri)]) == 0: # Should not happen since then it would be a leaf
@@ -97,6 +111,9 @@ def count_removed_classes_for_class(class_iri, leaf_descendants_map, classificat
         # Get string of subclasses from the map
         leaves_structure = leaf_descendants_map[str(class_iri)]
         leaves.update(leaves_structure)
+
+        if structural_leaf_ids is not None:
+            leaves &= structural_leaf_ids
     
     else:
         print(f"Classification {classification} is not supported for counting classes.")

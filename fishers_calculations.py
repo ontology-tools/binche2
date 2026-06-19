@@ -5,7 +5,7 @@ import json
 import copy 
 import math
 from visualitations_and_pruning import root_children_pruner, linear_branch_collapser_pruner_remove_less, high_p_value_branch_pruner, zero_degree_pruner, create_graph_from_map, id_to_name, create_graph_with_roles_and_structures
-from pre_fishers_calculations import count_removed_classes_for_class, count_removed_leaves, count_removed_classes_for_roles
+from pre_fishers_calculations import count_removed_classes_for_class, count_removed_leaves, count_removed_classes_for_roles, get_structural_leaf_ids
 from multiple_test_corrections import bonferroni_correction, benjamini_hochberg_fdr_correction
 import time
 
@@ -67,22 +67,32 @@ def normalize_id(raw_id: str) -> str:
         return f"http://purl.obolibrary.org/obo/{value}"
     return value
 
-def get_leaves(studyset_list, leaves_csv, class_to_leaf_map):
-    """ Get leaf descendants for the input classes, or the class itself if it's already a leaf. """
+def get_leaves(studyset_list, leaves_csv, class_to_leaf_map, structural_leaf_ids=None):
+    """ Get leaf descendants for the input classes, or the class itself if it's already a leaf.
+
+    structural_leaf_ids: if given, leaves mislabeled with a Classification other
+    than 'structural' (a ChEBI ontology error) are excluded.
+    """
     studyset_leaves = set()
 
     leaves_df = pd.read_csv(leaves_csv)
     print(leaves_df['IRI'].iloc[0].encode())
-    
+    all_leaf_ids = set(leaves_df['IRI'].values)
+
     for cls in studyset_list:
         print(f"Processing class {cls}...")
-        if cls in leaves_df['IRI'].values:
+        if cls in all_leaf_ids:
+            if structural_leaf_ids is not None and cls not in structural_leaf_ids:
+                print(f"Excluding class {cls}: not classified as 'structural' in ChEBI (likely a mislabeled leaf).")
+                continue
             # add to list of studyset leaves
             print(f"Class {cls} is already leaf.")
             studyset_leaves.add(cls)
         else:
             # get leaf descendants from map and add them to studyset leaves
             leaf_descendants = set(class_to_leaf_map.get(cls, []))
+            if structural_leaf_ids is not None:
+                leaf_descendants &= structural_leaf_ids
             print(f"Class {cls} is not a leaf, adding its {len(leaf_descendants)} leaf descendants.")
             studyset_leaves.update(leaf_descendants)
 
@@ -136,7 +146,7 @@ def get_n_ss_annotated_for_roles(studyset_leaves, class_to_check, class_to_all_r
     n_ss_annotated = len(leaves.intersection(set(studyset_leaves)))
     return n_ss_annotated
 
-def get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map, class_to_all_roles_map, roles_to_leaves_map, studyset_ancestors_roles):
+def get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, studyset_ancestors, class_to_leaf_map, class_to_all_roles_map, roles_to_leaves_map, studyset_ancestors_roles, structural_leaf_ids=None):
 
     # n_bg_leaves and n_ss_leaves will be the same for all classes
     n_bg_leaves = count_removed_leaves(removed_leaves_csv)
@@ -157,6 +167,7 @@ def get_enrichment_values(removed_leaves_csv, classification, studyset_leaves, s
                 classification,
                 class_to_all_roles_map,
                 roles_to_leaves_map,
+                structural_leaf_ids,
             )
             n_ss_annotated = get_n_ss_annotated(
                 studyset_leaves,
@@ -261,11 +272,13 @@ def run_enrichment_analysis(studyset_list,
     with open(roles_to_leaves_map_json, 'r') as f:
         roles_to_leaves_map = json.load(f)
 
+    structural_leaf_ids = get_structural_leaf_ids(removed_leaves_csv)
+
     # Normalize study set IDs to full IRIs
     studyset_list = [normalize_id(cls) for cls in studyset_list]
 
-   
-    studyset_leaves = get_leaves(studyset_list, removed_leaves_csv, class_to_leaf_map)
+
+    studyset_leaves = get_leaves(studyset_list, removed_leaves_csv, class_to_leaf_map, structural_leaf_ids)
     #print(f"Study set leaves: {studyset_leaves}")
     
     studyset_ancestors_all = get_ancestors_for_inputs(studyset_leaves, leaf_to_ancestors_map_file)
@@ -347,7 +360,8 @@ def run_enrichment_analysis(studyset_list,
         class_to_leaf_map,
         class_to_all_roles_map,
         roles_to_leaves_map,
-        studyset_ancestors_roles
+        studyset_ancestors_roles,
+        structural_leaf_ids
     )
 
     #print("Enrichment results:")
@@ -449,9 +463,11 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
     with open(roles_to_leaves_map_json, 'r') as f:
         roles_to_leaves_map = json.load(f)
 
+    structural_leaf_ids = get_structural_leaf_ids(removed_leaves_csv)
+
     studyset_list = [normalize_id(cls) for cls in studyset_list]
 
-    studyset_leaves = get_leaves(studyset_list, removed_leaves_csv, class_to_leaf_map)
+    studyset_leaves = get_leaves(studyset_list, removed_leaves_csv, class_to_leaf_map, structural_leaf_ids)
     print(f"Study set leaves: {studyset_leaves}")
 
     studyset_ancestors = get_ancestors_for_inputs(studyset_leaves, leaf_to_ancestors_map_file)
@@ -499,7 +515,8 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
         class_to_leaf_map,
         class_to_all_roles_map,
         roles_to_leaves_map,
-        studyset_ancestors_roles
+        studyset_ancestors_roles,
+        structural_leaf_ids
     )
 
     print("Enrichment results:")
@@ -509,7 +526,7 @@ def run_enrichment_analysis_plain_enrich_pruning_strategy(studyset_list,
     print("Enrichment results after Benjamini-Hochberg correction:")
     print_enrichment_results(enrichment_results)
 
-    pre_pruned_G = create_graph_with_roles_and_structures(studyset_leaves, studyset_ancestors, 
+    pre_pruned_G = create_graph_with_roles_and_structures(studyset_leaves, studyset_ancestors,
                             studyset_ancestors_roles, parent_map_file, 
                             class_to_all_roles_map, classification)
     G = pre_pruned_G.copy()
