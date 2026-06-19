@@ -75,16 +75,24 @@ def filter_chebifier_parents(parent_chebis, chebi_parent_map_json):
 
     return chosen_parents
 
-def gather_narrow_leaves(human_entities_tsv = "data/combined_hmdb_wikidata.tsv", leaves_csv = "data/chebi_leaves.csv", class_to_leaf_map = "data/chebi_class_to_leaf_map.json", output_json = "data/narrow_leaves.json", chebi_parent_map_json = "data/chebi_parent_map.json"):
-    """Build narrow background leaves from human entities TSV.
+def gather_narrow_leaves(compounds_tsv = "data/combined_hmdb_wikidata.tsv", leaves_csv = "data/chebi_leaves.csv", class_to_leaf_map = "data/chebi_class_to_leaf_map.json", output_json = "data/narrow_leaves.json", chebi_parent_map_json = "data/chebi_parent_map.json", taxon_label = None):
+    """Build narrow background leaves from a compounds TSV for a given taxon.
+
+    `compounds_tsv` can be any source (e.g. the combined HMDB+Wikidata file
+    for Homo sapiens, or a single-source Wikidata file for another taxon) as
+    long as it has a `chebi_id` column. `taxon_label` is purely descriptive
+    (recorded in `output_json`) so it's easy to tell which taxon a given
+    narrow background was built for.
 
     Workflow:
-    - Read all ChEBI IDs from `human_entities_tsv` (supports ';' or '|' separators).
+    - Read all ChEBI IDs from `compounds_tsv` (supports ';' or '|' separators).
     - For entities with multiple ChEBI IDs, filter to keep only the deepest ones in hierarchy.
     - If an ID is already a leaf (present in `leaves_csv` IRI column), keep it.
     - Otherwise, expand to all leaf descendants using `class_to_leaf_map`.
     - Save the resulting unique leaf IRIs to `output_json`.
     """
+
+    print(f"Taxon: {taxon_label or '(unspecified)'}")
 
     # Reuse cached leaves when available.
     # if os.path.exists(output_json):
@@ -94,7 +102,7 @@ def gather_narrow_leaves(human_entities_tsv = "data/combined_hmdb_wikidata.tsv",
        # print(f"Loaded {len(leaves)} narrow leaves from {output_json}")
        # return leaves
 
-    print(f"Building narrow leaves cache from {human_entities_tsv}...")
+    print(f"Building narrow leaves cache from {compounds_tsv}...")
     print(f"Using leaf membership from {leaves_csv}")
 
     # Accept either a ready dict or a JSON path for class->leaf mapping.
@@ -113,16 +121,16 @@ def gather_narrow_leaves(human_entities_tsv = "data/combined_hmdb_wikidata.tsv",
             if iri:
                 leaf_iris.add(iri)
 
-    # Collect all human CHEBI seeds and expand non-leaf seeds to descendants.
+    # Collect all CHEBI seeds for the taxon and expand non-leaf seeds to descendants.
     narrow_leaves = set()
     seeds_seen = 0
 
-    with open(human_entities_tsv, "r", encoding="utf-8", newline="") as f:
+    with open(compounds_tsv, "r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f, delimiter="\t")
         if "chebi_id" not in (reader.fieldnames or []):
-            raise KeyError(f"Expected 'chebi_id' column in {human_entities_tsv}")
+            raise KeyError(f"Expected 'chebi_id' column in {compounds_tsv}")
 
-        print(f"Found columns in human TSV: {reader.fieldnames}")
+        print(f"Found columns in compounds TSV: {reader.fieldnames}")
 
         for row in reader:
             raw_chebi = (row.get("chebi_id") or "").strip()
@@ -157,10 +165,11 @@ def gather_narrow_leaves(human_entities_tsv = "data/combined_hmdb_wikidata.tsv",
                 else:
                     narrow_leaves.update(descendants)
 
-    print(f"Processed {seeds_seen} human ChEBI seed IDs")
+    print(f"Processed {seeds_seen} ChEBI seed IDs")
 
     payload = {
-        "human_entities_tsv": human_entities_tsv,
+        "taxon_label": taxon_label,
+        "compounds_tsv": compounds_tsv,
         "leaves_csv": leaves_csv,
         "n_seeds_processed": seeds_seen,
         "narrow_leaves": sorted(narrow_leaves),
@@ -763,19 +772,36 @@ def run_narrow_background_enrichment_analysis_plain_enrich_pruning_strategy(
 
 if __name__ == "__main__":
 
-    task = "gather_leaves"  # "gather_leaves"
+    task = "gather_leaves"  # "gather_leaves" or "get_studyset_leaves"
 
-    # human_entities_tsv = "data/combined_hmdb_wikidata.tsv"
-    human_entities_tsv = "data/combined_hmdb_wikidata.tsv"
+    # ---- Choose which narrow background to (re)build ----
+    TAXON_LABEL = "homo_sapiens"  # "homo_sapiens" or "arabidopsis_thaliana"
+
+    # Each taxon's compounds_tsv comes from a different upstream pipeline:
+    # homo_sapiens combines HMDB + Wikidata (combine_human_datasets.py), while
+    # other taxa are Wikidata-only (find_missing_chebis.py, "arabidopsis_thaliana" preset).
+    NARROW_BACKGROUND_CONFIGS = {
+        "homo_sapiens": {
+            "compounds_tsv": "data/combined_hmdb_wikidata.tsv",
+            "output_json": "data/human_entities_leaves.json",
+        },
+        "arabidopsis_thaliana": {
+            "compounds_tsv": "data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana_updatedchebis.tsv",
+            "output_json": "data/arabidopsis_thaliana_leaves.json",
+        },
+    }
+
+    compounds_tsv = NARROW_BACKGROUND_CONFIGS[TAXON_LABEL]["compounds_tsv"]
+    leaves_json = NARROW_BACKGROUND_CONFIGS[TAXON_LABEL]["output_json"]
     leaves_csv = "data/removed_leaf_classes_with_smiles.csv"
     class_to_leaf_map = "data/class_to_leaf_descendants_map.json"
-    human_leaves_json = "data/human_entities_leaves.json" # output of gather_narrow_leaves
 
     chebi_parent_map_json="data/chebi_parent_map.json"
 
     if task == "gather_leaves":
-        gather_narrow_leaves(human_entities_tsv, leaves_csv, class_to_leaf_map, human_leaves_json, chebi_parent_map_json)
-    
+        print(f"Gathering narrow background leaves for taxon: {TAXON_LABEL}")
+        gather_narrow_leaves(compounds_tsv, leaves_csv, class_to_leaf_map, leaves_json, chebi_parent_map_json, taxon_label=TAXON_LABEL)
+
     elif task == "get_studyset_leaves":
         studyset_list = [
             "CHEBI:15377",  # water
@@ -785,7 +811,7 @@ if __name__ == "__main__":
         ]
         studyset_leaves, leaves_to_expand, parents_to_expand = get_studyset_leaves_narrow(
             studyset_list,
-            human_entities_leaves_json=human_leaves_json,
+            human_entities_leaves_json=leaves_json,
             leaves_csv=leaves_csv,
             class_to_leaf_map=class_to_leaf_map,
         )

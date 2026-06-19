@@ -16,6 +16,9 @@ cd /idiap/temp/mcarlsson/binche2
 
 source bincheEnv/bin/activate
 
-python wikidata/find_missing_chebis.py
+# Optional first arg selects the source preset: wikidata_hs (default), hmdb, or wikidata_at
+SOURCE=${1:-wikidata_hs}
+
+python wikidata/find_missing_chebis.py --source "$SOURCE"
 
 echo Done!

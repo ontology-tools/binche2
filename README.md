@@ -10,7 +10,7 @@ The web application is available at https://binche2.hastingslab.org/.
 The web application is hosted at https://binche2.hastingslab.org/. To run calculations locally, execute `website/app.py`. Note that all necessary data files must be generated beforehand for local execution (as described in the [Workflow](#workflow) section below).
 
 ### Study Set
-On the home page, enter your study set as ChEBI IDs (one per line), as shown in the example. You can optionally provide weights for each compound (tab or space-separated). Instead of ChEBI IDs, SMILES can be used to represent a molecular entity. If a SMILES string cannot be found in the ChEBI ontology, it's predicted direct parent classes can be used for enrichment calculations. The parent predictions are made with [Chebifier](https://chebifier.hastingslab.org/).
+On the home page, enter your study set as ChEBI IDs (one per line), as shown in the example. You can optionally provide weights for each compound (tab or space-separated). Instead of ChEBI IDs, SMILES can be used to represent a molecular entity. Each SMILES is resolved to a ChEBI ID in this order: (1) an exact string match against the local table of ChEBI leaf classes, (2) a match via the InChIKey computed from the SMILES, (3) a direct lookup through the [Chebifier](https://chebifier.hastingslab.org/) API. If none of these resolve, its predicted direct parent classes (also from Chebifier) can optionally be used for enrichment calculations instead.
 
 Then specify the target of enrichment:
 
@@ -59,9 +59,8 @@ The graph will initially show only the most relevant branches. This means that a
 There are options to choose the layout of the graph, which nodes are shown, and how to export it. Note that if you change the target of enrichment or pruning options under Settings, all calculations will run again. 
 
 ## Human background
-TODO: add more here
 
-Compounds in both datasets were mapped to ChEBI leaf classes to serve as a background for enrichment. Where a ChEBI identifier was already present, it was used directly. For compounds lacking a ChEBI identifier, matching was attempted first via InChIKey lookup against the ChEBI leaf classes, and subsequently via SMILES submission to the Chebifier API, which performs both exact lookup and parent-class classification. For compounds resolved only to a parent class rather than a leaf, the deepest class in the ChEBI hierarchy was retained to avoid introducing overly broad annotations. Where a matched ChEBI ID corresponded to a non-leaf class in the ontology, it was expanded to its leaf descendants; classes with more than 150 leaf descendants were excluded to prevent high-level classes from disproportionately inflating the background. The resulting set of leaf classes were used to form the narrow background used in the enrichment analysis.
+Compounds from HMDB and Wikidata (LOTUS) were mapped to ChEBI leaf classes to serve as a background for enrichment. Matching to a ChEBI ID was attempted in this order: (1) a ChEBI ID already present in the source data, (2) an exact SMILES match against the local table of ChEBI leaf classes (Wikidata only), (3) an InChIKey lookup against the same local table, (4) the Chebifier API, which performs both a direct lookup and parent-class classification — for parent-class matches, the deepest class in the ChEBI hierarchy was kept to avoid overly broad annotations. Where a matched ChEBI ID corresponded to a non-leaf class in the ontology, it was expanded to its leaf descendants; classes with more than 150 leaf descendants were excluded to prevent high-level classes from disproportionately inflating the background. The resulting set of leaf classes were used to form the narrow background used in the enrichment analysis.
 
 ## Workflow
 
@@ -138,7 +137,7 @@ First (only needed once), run task *"build_class_to_leaf_map"* in `pre_fishers_c
 Enrichment calculations can be run in `fishers_calculations.py`, but this is easiest done via the web application. Either use the website link (easiest since no preparation steps to obtain all the necessary files are needed) or run `website/app.py` locally.
 
 #### 6. Needed for human dataset
-1. Extract Lotus compunds and crate files with create_wikidata_output_files() in `wikidata/get_wikidata_lotus.py`
+1. Extract Lotus compunds and create files with create_wikidata_output_files() in `wikidata/get_wikidata_lotus.py`
 
 Files created:
 
@@ -147,9 +146,9 @@ data/wikidata/created/compounds_with_chebi_ids.tsv
 data/wikidata/created/compounds_with_chebi_ids_homo_sapiens.tsv
 - To be used in later steps
 
-2. Extract HMDB compunds and create files using create_hmdb_output_file() [or extract_hmdb_to_file if importes] in `hmdb/extract_hmdb.py`. run using `jobs/run_extract_hmdb.sh` or 
+2. Extract HMDB compunds and create files using create_hmdb_output_file() [or extract_hmdb_to_file if imported] in `hmdb/extract_hmdb.py`. run using `jobs/run_extract_hmdb.sh` or 
 
-OBSERVE howevere that `data/hmdb_metabolites.xml` is needed for the function to work and is downloaded from https://hmdb.ca/downloads. The XML file named 'All Metabolites' from 2021-11-02 was used. 
+OBSERVE however that `data/hmdb_metabolites.xml` is needed for the function to work and is downloaded from https://hmdb.ca/downloads. The XML file named 'All Metabolites' from 2021-11-02 was used. 
 
 Output: 
 - hmdb_metabolites_extract.tsv
@@ -158,9 +157,9 @@ Output:
 
 Output: data/hmdb_metabolites_extract_quantified_detected.tsv
 
-4. `wikidata/find_missing_chebis.py` (run via `jobs/run_find_missing_chebis.sh`) find missing CHEBI IDs for the lotus and hmdb files by running main_find_missing_chebis(source) where source is either "wikidata" or "hmdb". Alternatively run run_find_missing_chebis("hmdb"). This function is safer to import.
+4. `wikidata/find_missing_chebis.py` (run via `jobs/run_find_missing_chebis.sh [source]`) finds missing CHEBI IDs for the lotus and hmdb files by running main_find_missing_chebis(source) where source is one of the presets in `SOURCE_PRESETS`: "wikidata_hs" (Wikidata, Homo sapiens), "hmdb", or "wikidata_at" (Wikidata, Arabidopsis thaliana). Alternatively run run_find_missing_chebis("hmdb"). This function is safer to import.
 
-CCHEBI ID matches to the CHEBI background are attempted in this order
+CHEBI ID matches to the CHEBI background are attempted in this order
 
 - direct ChEBI matches (Lotus)
 - direct SMILES matches
@@ -170,6 +169,7 @@ CCHEBI ID matches to the CHEBI background are attempted in this order
 Output (depending on chosen source):
 - "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens_updatedchebis.tsv"
 - "data/hmdb_metabolites_extract_quantified_detected_updatedchebis.tsv"
+- "data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana_updatedchebis.tsv"
 
 5. In `wikidata/combine_human_datasets.py`, the output sources from the previous step are combined with combine_datasets(). If no CHEBI ID exists, the row is dropped. 
 
@@ -179,12 +179,29 @@ Output:
 6. Create a file with the human leaf classes in `wikidata/narrow_background_fishers.py` with gather_narrow_leaves(). 
 
 Files needed:
-human_entities_tsv = "data/combined_hmdb_wikidata.tsv"
+compounds_tsv = "data/combined_hmdb_wikidata.tsv"
 leaves_csv = "data/removed_leaf_classes_with_smiles.csv"
 class_to_leaf_map = "data/class_to_leaf_descendants_map.json"
+taxon_label = "homo_sapiens" (recorded in the output JSON, purely descriptive)
 
 Output:
-human_leaves_json = "data/human_entities_leaves.json" 
+output_json = "data/human_entities_leaves.json" 
+
+#### Narrow background for a single Wikidata taxon (e.g. Arabidopsis thaliana)
+
+This is the same workflow as above, but since there is only one source (Wikidata), steps 2, 3, and 5 (HMDB extraction/filtering and combining datasets) are skipped entirely:
+
+1. Reuse the existing `data/wikidata/created/compounds_with_chebi_ids.tsv` from step 1 (no need to re-download or re-run the SMILES matching). Filter it to the chosen taxon with `keep_taxon_compounds()` in `wikidata/get_wikidata_lotus.py`, passing a `taxon_label` that must be a key in the `TAXA` dict.
+
+Output: `data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana.tsv`
+
+2. Fill in any still-missing ChEBI IDs using the "wikidata_at" preset in `wikidata/find_missing_chebis.py`, e.g. `jobs/run_find_missing_chebis.sh wikidata_at`.
+
+Output: `data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana_updatedchebis.tsv`
+
+3. Build the leaf classes with `gather_narrow_leaves()` in `wikidata/narrow_background_fishers.py` (set `TAXON_LABEL = "arabidopsis_thaliana"` in its `__main__` block), passing the file from step 2 as `compounds_tsv` and `taxon_label="arabidopsis_thaliana"` (just for traceability in the output file).
+
+Output: `data/arabidopsis_thaliana_leaves.json`
 
 
 

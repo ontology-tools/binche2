@@ -264,7 +264,7 @@ def find_missing_chebis(compounds_file, output_file_path=None, smiles_columns=No
 
 
 def run_find_missing_chebis(
-    source: str = "wikidata",
+    source: str = "wikidata_hs",
     compounds_file: Optional[str] = None,
     output_file: Optional[str] = None,
     smiles_columns: Optional[list] = None,
@@ -276,7 +276,7 @@ def run_find_missing_chebis(
     from other scripts (e.g., `create_files.py`).
     """
     SOURCE_PRESETS = {
-        "wikidata": {
+        "wikidata_hs": {
             "input": "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens.tsv",
             "output": "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens_updatedchebis.tsv",
             "smiles_columns": ["canonicalSmiles", "isomericSmiles"],
@@ -286,6 +286,12 @@ def run_find_missing_chebis(
             "input": "data/hmdb_metabolites_extract_quantified_detected.tsv",
             "output": "data/hmdb_metabolites_extract_quantified_detected_updatedchebis.tsv",
             "smiles_columns": ["smiles"],
+            "chebi_column": "chebi_id",
+        },
+        "wikidata_at": {
+            "input": "data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana.tsv",
+            "output": "data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana_updatedchebis.tsv",
+            "smiles_columns": ["canonicalSmiles", "isomericSmiles"],
             "chebi_column": "chebi_id",
         },
     }
@@ -312,7 +318,7 @@ def main_find_missing_chebis(source):
     start_time = time.time()
 
     SOURCE_PRESETS = {
-    "wikidata": {
+    "wikidata_hs": {
         "input": "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens.tsv",
         "output": "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens_updatedchebis.tsv",
         "smiles_columns": ["canonicalSmiles", "isomericSmiles"],
@@ -324,6 +330,12 @@ def main_find_missing_chebis(source):
         "smiles_columns": ["smiles"],
         "chebi_column": "chebi_id",
     },
+    "wikidata_at": {
+        "input": "data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana.tsv",
+        "output": "data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana_updatedchebis.tsv",
+        "smiles_columns": ["canonicalSmiles", "isomericSmiles"],
+        "chebi_column": "chebi_id",
+    },
     }
 
     parser = argparse.ArgumentParser(
@@ -331,9 +343,9 @@ def main_find_missing_chebis(source):
     )
     parser.add_argument(
         "--source",
-        choices=("wikidata", "hmdb"),
+        choices=("wikidata_hs", "hmdb", "wikidata_at"),
         default=source,
-        help="Use built-in defaults for selected source (default: wikidata).",
+        help="Use built-in defaults for selected source (default: wikidata_hs).",
     )
     parser.add_argument(
         "compounds_file",
@@ -384,5 +396,5 @@ def main_find_missing_chebis(source):
 
 
 if __name__ == "__main__":
-    source = "wikidata"  # or "hmdb"
+    source = "wikidata_hs"  # or "hmdb" or "wikidata_at"
     main_find_missing_chebis(source)

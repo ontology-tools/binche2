@@ -17,7 +17,7 @@ from prepare_role_calculations import (
 from pruning_split_up_structure import identify_structural_vs_functional
 from pre_fishers_calculations import build_class_to_leaf_map
 
-from wikidata.get_wikidata_lotus import create_wikidata_output_files
+from wikidata.get_wikidata_lotus import create_wikidata_output_files, keep_taxon_compounds
 from wikidata.get_inchikeys import convert_smiles_file
 from hmdb.extract_hmdb import extract_hmdb_to_file
 from hmdb.filter_hmdb_statuses import filter_hmdb_statuses_main
@@ -318,6 +318,16 @@ if __name__ == "__main__":
         include_download=True,
     )
 
+    print("Filtering Wikidata compounds for Arabidopsis thaliana...")
+    _run_stage(
+        "filter_wikidata_arabidopsis_thaliana",
+        stage_timings,
+        keep_taxon_compounds,
+        "data/wikidata/created/compounds_with_chebi_ids.tsv",
+        "data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana.tsv",
+        "arabidopsis_thaliana",
+    )
+
     print("Creating HMDB output file...")
     _run_stage(
         "create_hmdb_output_file",
@@ -334,12 +344,20 @@ if __name__ == "__main__":
         filter_hmdb_statuses_main,
     )
 
-    print("Finding missing ChEBI IDs for Wikidata...")
+    print("Finding missing ChEBI IDs for Wikidata (Homo sapiens)...")
     _run_stage(
-        "find_missing_chebis_wikidata",
+        "find_missing_chebis_wikidata_hs",
         stage_timings,
         run_find_missing_chebis,
-        "wikidata",
+        "wikidata_hs",
+    )
+
+    print("Finding missing ChEBI IDs for Wikidata (Arabidopsis thaliana)...")
+    _run_stage(
+        "find_missing_chebis_wikidata_at",
+        stage_timings,
+        run_find_missing_chebis,
+        "wikidata_at",
     )
 
     print("Finding missing ChEBI IDs for HMDB...")
@@ -357,11 +375,28 @@ if __name__ == "__main__":
         combine_datasets,
     )
 
-    print("Gathering narrow leaf classes...")
+    print("Gathering narrow leaf classes (Homo sapiens)...")
     _run_stage(
-        "gather_narrow_leaves",
+        "gather_narrow_leaves_homo_sapiens",
         stage_timings,
         gather_narrow_leaves,
+        compounds_tsv="data/combined_hmdb_wikidata.tsv",
+        leaves_csv="data/removed_leaf_classes_with_smiles.csv",
+        class_to_leaf_map="data/class_to_leaf_descendants_map.json",
+        output_json="data/human_entities_leaves.json",
+        taxon_label="homo_sapiens",
+    )
+
+    print("Gathering narrow leaf classes (Arabidopsis thaliana)...")
+    _run_stage(
+        "gather_narrow_leaves_arabidopsis_thaliana",
+        stage_timings,
+        gather_narrow_leaves,
+        compounds_tsv="data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana_updatedchebis.tsv",
+        leaves_csv="data/removed_leaf_classes_with_smiles.csv",
+        class_to_leaf_map="data/class_to_leaf_descendants_map.json",
+        output_json="data/arabidopsis_thaliana_leaves.json",
+        taxon_label="arabidopsis_thaliana",
     )
 
    

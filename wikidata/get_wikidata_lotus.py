@@ -6,6 +6,12 @@ from pathlib import Path
 DEFAULT_COMPOUNDS_WITH_CHEBI_IDS = "data/wikidata/created/compounds_with_chebi_ids.tsv"
 DEFAULT_HOMO_SAPIENS_OUTPUT = "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens.tsv"
 
+# Single place to look up which Wikidata taxon ID a narrow background is built for.
+TAXA = {
+    "homo_sapiens": "http://www.wikidata.org/entity/Q15978631",
+    "arabidopsis_thaliana": "http://www.wikidata.org/entity/Q158695",
+}
+
 
 def normalize_chebi_id(raw_value):
     if pd.isna(raw_value):
@@ -96,7 +102,7 @@ def print_summary():
     print(f"  Structure-organism pairs: {len(pairs)}")
 
 def count_human_entries():
-    homo_sapiens_uri = "http://www.wikidata.org/entity/Q15978631"
+    homo_sapiens_uri = TAXA["homo_sapiens"]
     save_dir = Path(__file__).resolve().parent.parent / "data" / "wikidata"
     taxa_path = save_dir / "taxa.tsv"
     pairs_path = save_dir / "compound_reference_taxon.tsv"
@@ -122,7 +128,7 @@ def count_human_entries():
 
 
 def find_top_n_duplicate_human_compounds(top_n=10): # Just used for simple checks
-    homo_sapiens_uri = "http://www.wikidata.org/entity/Q15978631"
+    homo_sapiens_uri = TAXA["homo_sapiens"]
     save_dir = Path(__file__).resolve().parent.parent / "data" / "wikidata"
     taxa_path = save_dir / "taxa.tsv"
     pairs_path = save_dir / "compound_reference_taxon.tsv"
@@ -257,8 +263,13 @@ def add_taxon_and_taxon_names(input_file_path, output_file_path):
     )
 
 
-def keep_homo_sapiens_compounds(input_file_path, output_file_path):
-    homo_sapiens_uri = "http://www.wikidata.org/entity/Q15978631"
+def keep_taxon_compounds(input_file_path, output_file_path, taxon_label):
+    """Filter a compounds file down to rows tagged with the given taxon.
+
+    `taxon_label` must be a key in TAXA, so the chosen taxon is always
+    visible at the call site instead of a bare Wikidata Q-id.
+    """
+    taxon_uri = TAXA[taxon_label]
     compounds = pd.read_csv(input_file_path, sep="\t")
 
     if "taxon" not in compounds.columns:
@@ -267,16 +278,17 @@ def keep_homo_sapiens_compounds(input_file_path, output_file_path):
             "Run add_taxon_and_taxon_names first."
         )
 
-    taxon_mask = compounds["taxon"].astype(str).str.contains(homo_sapiens_uri, na=False)
-    homo_sapiens_compounds = compounds[taxon_mask].copy()
+    print(f"[WIKIDATA] Filtering to taxon: {taxon_label} ({taxon_uri})")
+    taxon_mask = compounds["taxon"].astype(str).str.contains(taxon_uri, na=False)
+    taxon_compounds = compounds[taxon_mask].copy()
 
     Path(output_file_path).parent.mkdir(parents=True, exist_ok=True)
-    homo_sapiens_compounds.to_csv(output_file_path, index=False, sep="\t")
+    taxon_compounds.to_csv(output_file_path, index=False, sep="\t")
 
-    print(f"Saved Homo sapiens subset to {output_file_path}")
+    print(f"Saved {taxon_label} subset to {output_file_path}")
     print(
-        f"Kept {len(homo_sapiens_compounds)} out of {len(compounds)} compounds "
-        f"({(len(homo_sapiens_compounds)/len(compounds))*100:.2f}%)."
+        f"Kept {len(taxon_compounds)} out of {len(compounds)} compounds "
+        f"({(len(taxon_compounds)/len(compounds))*100:.2f}%)."
     )
 
 def count_chebi_ids(input_file_path):
@@ -288,14 +300,15 @@ def count_chebi_ids(input_file_path):
 
 def create_wikidata_output_files(
     compounds_with_chebi_ids_path=DEFAULT_COMPOUNDS_WITH_CHEBI_IDS,
-    homo_sapiens_output_path=DEFAULT_HOMO_SAPIENS_OUTPUT,
+    taxon_output_path=DEFAULT_HOMO_SAPIENS_OUTPUT,
+    taxon_label="homo_sapiens",
     include_download=True,
 ):
     """Create all standard Wikidata output files used downstream.
 
     Output files:
-    - compounds_with_chebi_ids_path
-    - homo_sapiens_output_path
+    - compounds_with_chebi_ids_path (all taxa)
+    - taxon_output_path (filtered to `taxon_label`, see TAXA for valid labels)
     """
 
     if include_download:
@@ -313,21 +326,21 @@ def create_wikidata_output_files(
         compounds_with_chebi_ids_path,
     )
 
-    print("[WIKIDATA] Filtering to Homo sapiens compounds...")
-    keep_homo_sapiens_compounds(
+    keep_taxon_compounds(
         compounds_with_chebi_ids_path,
-        homo_sapiens_output_path,
+        taxon_output_path,
+        taxon_label,
     )
-    count_chebi_ids(homo_sapiens_output_path)
+    count_chebi_ids(taxon_output_path)
 
     print("[WIKIDATA] Output creation complete. Created files:")
     print(f"  - {compounds_with_chebi_ids_path}")
-    print(f"  - {homo_sapiens_output_path}")
+    print(f"  - {taxon_output_path}")
 
 if __name__ == "__main__":
-    
-    task = count_chebi_ids 
-    # options: download_wikidata_lotus, count_human_entries, print_summary, find_top_n_duplicate_human_compounds, connect_smiles_to_chebi_ids, add_taxon_and_taxon_names, keep_homo_sapiens_compounds, count_chebi_ids, create_wikidata_output_files
+
+    task = count_chebi_ids
+    # options: download_wikidata_lotus, count_human_entries, print_summary, find_top_n_duplicate_human_compounds, connect_smiles_to_chebi_ids, add_taxon_and_taxon_names, keep_taxon_compounds, count_chebi_ids, create_wikidata_output_files
 
     if task == download_wikidata_lotus:
         download_wikidata_lotus()
@@ -349,10 +362,11 @@ if __name__ == "__main__":
         input_file_path = "data/wikidata/created/compounds_with_chebi_ids.tsv"
         output_file_path = input_file_path
         add_taxon_and_taxon_names(input_file_path, output_file_path)
-    elif task == keep_homo_sapiens_compounds:
+    elif task == keep_taxon_compounds:
+        taxon_label = "arabidopsis_thaliana"  # <-- choose taxon here, must be a key in TAXA
         input_file_path = "data/wikidata/created/compounds_with_chebi_ids.tsv"
-        output_file_path = "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens.tsv"
-        keep_homo_sapiens_compounds(input_file_path, output_file_path)
+        output_file_path = f"data/wikidata/created/compounds_with_chebi_ids_{taxon_label}.tsv"
+        keep_taxon_compounds(input_file_path, output_file_path, taxon_label)
     elif task == count_chebi_ids:
         input_file_path = "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens.tsv"
         count_chebi_ids(input_file_path)
