@@ -24,6 +24,12 @@ app.secret_key = 'your_secret_key'  # Replace with a secure secret key
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 LOCAL_LOOKUP_FILE = os.path.join(BASE_DIR, 'data', 'removed_leaf_classes_with_inchikeys.csv')
 
+# Maps a "background" form value to its narrow-background leaves JSON file.
+NARROW_BACKGROUND_LEAVES_JSON = {
+    'human': 'data/human_entities_leaves.json',
+    'arabidopsis_thaliana': 'data/arabidopsis_thaliana_leaves.json',
+}
+
 
 def _clean_lookup_value(value):
     if value is None:
@@ -381,15 +387,16 @@ def run_analysis():
 
             return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'), expand_background=session.get('expand_background', True), background=session.get('background', 'full'))
 
-        elif background == 'human':
+        elif background in NARROW_BACKGROUND_LEAVES_JSON:
             if weights_dict:
                 print("Weights are not currently supported for narrow background analysis.")
                 return render_template('submission.html', user_study_set=raw_studyset, error_message="Weights are not currently supported for narrow background analysis. Please remove weights and try again.")
-            
+
             else:
                 results, pruned_G, leaves_to_expand_background, parents_to_expand_background = run_narrow_background_enrichment_analysis_plain_enrich_pruning_strategy(
                     studyset_list,
                     classification=session.get('classification'),
+                    narrow_background_leaves_json=NARROW_BACKGROUND_LEAVES_JSON[background],
                     expand_background=session.get('expand_background', True)
                 )
                 graph_json_file = f'website/static/data/graph_{session["session_id"]}.json'
@@ -418,13 +425,13 @@ def run_analysis():
     
     background = session.get('background')
     
-    # Initialize expanded leaves/parents tracking (for human background)
+    # Initialize expanded leaves/parents tracking (for narrow backgrounds)
     leaves_to_expand_background = set()
     parents_to_expand_background = set()
-    
+
     # Use weighted analysis if weights are present, otherwise use standard analysis
     if weights_dict:
-        if background == 'human':
+        if background in NARROW_BACKGROUND_LEAVES_JSON:
             print("Weights are not currently supported for narrow background analysis.")
             return render_template('submission.html', user_study_set=raw_studyset, error_message="Weights are not currently supported for narrow background analysis. Please remove weights and try again.")
         results, pruned_G = run_weighted_enrichment_analysis(weights_dict,
@@ -439,7 +446,7 @@ def run_analysis():
                                             bonferroni_correct=bonferroni_correct,
                                             benjamini_hochberg_correct=benjamini_hochberg_correct)
     else:
-        if background == 'human':
+        if background in NARROW_BACKGROUND_LEAVES_JSON:
             results, pruned_G, leaves_to_expand_background, parents_to_expand_background = run_narrow_background_enrichment_analysis(studyset_list,
                                               bonferroni_correct=bonferroni_correct,
                                               benjamini_hochberg_correct=benjamini_hochberg_correct,
@@ -448,6 +455,7 @@ def run_analysis():
                                                high_p_value_prune=high_p_value_prune, p_value_threshold=p_value_threshold,
                                                zero_degree_prune=zero_degree_prune,
                                                classification=session.get('classification'),
+                                               narrow_background_leaves_json=NARROW_BACKGROUND_LEAVES_JSON[background],
                                                expand_background=session.get('expand_background', True))
         else:
             results, pruned_G = run_enrichment_analysis(studyset_list,

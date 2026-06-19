@@ -72,7 +72,7 @@
 <h2 class="grey"> Processing Summary </h2>
 <p class="muted-log"><strong>Analysed leaves:</strong> {{ results.study_set | default([]) | join(', ') }}</p>
 <p class="muted-log"><strong>Removed nodes through pruning:</strong> {{ results.removed_nodes | default([]) | join(', ') }}</p>
-{% if background == 'human' %}
+{% if background != 'full' %}
 <p class="muted-log"><strong>Background expansion enabled:</strong> {{ expand_background }}</p>
 {% endif %}
 {% if expand_background and leaves_to_expand_background %}
