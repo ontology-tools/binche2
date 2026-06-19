@@ -15,6 +15,9 @@
 <!-- Cytoscape-qTip extension -->
 <script src="https://cdn.jsdelivr.net/npm/cytoscape-qtip@2.7.0/cytoscape-qtip.min.js"></script>
 
+<!-- jsPDF (for PDF export) -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
 {% endblock %}
 
 {% block nav_items %}
@@ -33,6 +36,7 @@
         <li><hr class="dropdown-divider"></li>
         <li><a href="#" class="dropdown-item export-option" data-format="png">Export as PNG</a></li>
         <li><a href="#" class="dropdown-item export-option" data-format="jpeg">Export as JPEG</a></li>
+        <li><a href="#" class="dropdown-item export-option" data-format="pdf">Export as PDF</a></li>
     </ul>
 </li>
 
@@ -404,9 +408,12 @@
         // Export graph: optionally composites the on-screen legend onto the exported
         // image, alongside the full graph (cy's {full:true} captures the whole graph
         // regardless of current pan/zoom, which a DOM screenshot would not).
+        // PDF embeds the same raster image as a single page sized to match it.
         function exportGraphWithLegend(format) {
             const scale = 2;
+            const isPdf = format === 'pdf';
             const includeLegend = document.getElementById('exportIncludeLegend').checked;
+            // PDF always embeds a lossless PNG raster; png/jpeg use their own native format.
             const rawData = format === 'jpeg'
                 ? cy.jpeg({ full: true, scale, quality: 0.9 })
                 : cy.png({ full: true, scale });
@@ -420,8 +427,25 @@
                 document.body.removeChild(link);
             };
 
+            const savePdf = (dataUrl, width, height) => {
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({
+                    orientation: width >= height ? 'landscape' : 'portrait',
+                    unit: 'px',
+                    format: [width, height],
+                });
+                pdf.addImage(dataUrl, 'PNG', 0, 0, width, height);
+                pdf.save('graph.pdf');
+            };
+
             if (!includeLegend) {
-                downloadDataUrl(rawData);
+                if (isPdf) {
+                    const img = new Image();
+                    img.onload = () => savePdf(rawData, img.width, img.height);
+                    img.src = rawData;
+                } else {
+                    downloadDataUrl(rawData);
+                }
                 return;
             }
 
@@ -441,6 +465,11 @@
 
                 drawLegend(ctx, img.width + padding, padding, layout);
 
+                if (isPdf) {
+                    savePdf(canvas.toDataURL('image/png'), canvas.width, canvas.height);
+                    return;
+                }
+
                 const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
                 const combinedData = format === 'jpeg' ? canvas.toDataURL(mimeType, 0.9) : canvas.toDataURL(mimeType);
                 downloadDataUrl(combinedData);
@@ -452,7 +481,7 @@
             item.addEventListener('click', e => {
                 e.preventDefault(); // stop link navigation
                 const format = e.target.dataset.format;
-                if (format === 'png' || format === 'jpeg') {
+                if (format === 'png' || format === 'jpeg' || format === 'pdf') {
                     exportGraphWithLegend(format);
                 }
             });
