@@ -41,6 +41,12 @@ from multiple_test_corrections import (
     bonferroni_correction,
     benjamini_hochberg_fdr_correction,
 )
+from wikidata.narrow_background_fishers import (
+    get_studyset_leaves_narrow,
+    count_narrow_leaves,
+    count_narrow_leaves_for_class,
+    count_narrow_leaves_for_role,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -338,21 +344,23 @@ def _propagate_weights_to_leaves(weights_dict, class_to_leaf_map, removed_leaves
     return weights_with_leaves
 
 
-def _build_background_weights(weights_with_leaves, removed_leaves_csv, structural_leaf_ids=None):
+def _build_background_weights(weights_with_leaves, removed_leaves_csv, background_leaf_ids=None):
     """
     Build the full background weight array.
     Every leaf in the background gets its weight from weights_with_leaves
     (if measured) or 0.0 otherwise.
 
-    structural_leaf_ids: if given, restricts the background population to
-    genuine 'structural'-classified leaves, so the population size used
-    inside the SaddleSum statistic matches n_bg_leaves reported elsewhere.
+    background_leaf_ids: if given, restricts the background population to
+    this leaf set — either the genuine 'structural'-classified leaves (full
+    background) or a narrow background's leaves (plus any expansion), so the
+    population size used inside the SaddleSum statistic matches n_bg_leaves
+    reported elsewhere.
 
     Must be called with weights_with_leaves (post-propagation), not
     the raw weights_dict.
     """
-    if structural_leaf_ids is not None:
-        all_bg_leaves = list(structural_leaf_ids)
+    if background_leaf_ids is not None:
+        all_bg_leaves = list(background_leaf_ids)
     else:
         leaves_df = pd.read_csv(removed_leaves_csv)
         all_bg_leaves = list(leaves_df['IRI'].values)
@@ -506,6 +514,103 @@ def get_weighted_enrichment_values(
     return results
 
 
+# ---------------------------------------------------------------------------
+# get_weighted_enrichment_values_narrow  (mirrors get_enrichment_values_narrow
+# in wikidata/narrow_background_fishers.py)
+# ---------------------------------------------------------------------------
+
+def get_weighted_enrichment_values_narrow(
+    narrow_background_leaves_json,
+    classification,
+    studyset_leaves,
+    studyset_ancestors,
+    class_to_leaf_map,
+    class_to_all_roles_map,
+    roles_to_leaves_map,
+    studyset_ancestors_roles,
+    weights_with_leaves,
+    leaves_to_expand_background,
+    expand_background=True,
+):
+    """
+    Compute SaddleSum enrichment for every ancestor class (and role class)
+    against a narrow (organism-specific) background, instead of the full
+    ChEBI background. Mirrors get_weighted_enrichment_values, but the
+    background population is the narrow leaf set (plus any study-set leaves
+    outside it, if expand_background is True).
+    """
+    with open(narrow_background_leaves_json, 'r', encoding='utf-8') as f:
+        cached = json.load(f)
+    background_leaf_ids = set(cached.get("narrow_leaves", []))
+    if expand_background and leaves_to_expand_background:
+        background_leaf_ids.update(leaves_to_expand_background)
+
+    background_weights = _build_background_weights(weights_with_leaves, None, background_leaf_ids)
+    saddler = _SaddleSum(background_weights)
+
+    studyset_leaves_set = set(studyset_leaves)
+    n_bg_leaves = count_narrow_leaves(narrow_background_leaves_json, leaves_to_expand_background, expand_background)
+    n_ss_leaves = len(studyset_leaves)
+
+    results = {}
+
+    if classification in ["structural", "full"]:
+        for cls in studyset_ancestors:
+            if cls in studyset_leaves_set:
+                continue
+
+            term_leaves = set(class_to_leaf_map.get(cls, []))
+
+            if term_leaves:
+                score, n_ss_annotated, p_value = calculate_weighted_p_value(
+                    saddler, term_leaves, studyset_leaves_set, weights_with_leaves
+                )
+            else:
+                score, n_ss_annotated, p_value = 0.0, 0, 1.0
+
+            _, n_bg_annotated = count_narrow_leaves_for_class(
+                cls, narrow_background_leaves_json, class_to_leaf_map,
+                leaves_to_expand_background, expand_background,
+            )
+
+            results[cls] = {
+                "class": id_to_name(cls),
+                "score": score,
+                "n_ss_annotated": n_ss_annotated,
+                "n_ss_leaves": n_ss_leaves,
+                "n_bg_annotated": n_bg_annotated,
+                "n_bg_leaves": n_bg_leaves,
+                "odds_ratio": float('inf') if n_ss_annotated > 0 else 0.0,
+                "p_value": p_value,
+            }
+
+    if classification in ["functional", "full"] and studyset_ancestors_roles:
+        print(f"Calculating weighted enrichment for {len(studyset_ancestors_roles)} roles...")
+        for role in studyset_ancestors_roles:
+            term_leaves = set(roles_to_leaves_map.get(role, []))
+            score, n_ss_annotated, p_value = calculate_weighted_p_value(
+                saddler, term_leaves, studyset_leaves_set, weights_with_leaves
+            )
+            _, n_bg_annotated = count_narrow_leaves_for_role(
+                role, narrow_background_leaves_json, roles_to_leaves_map,
+                leaves_to_expand_background, expand_background,
+            )
+            results[role] = {
+                "class": id_to_name(role),
+                "score": score,
+                "n_ss_annotated": n_ss_annotated,
+                "n_ss_leaves": n_ss_leaves,
+                "n_bg_annotated": n_bg_annotated,
+                "n_bg_leaves": n_bg_leaves,
+                "odds_ratio": float('inf') if n_ss_annotated > 0 else 0.0,
+                "p_value": p_value,
+            }
+
+    saddler.log_fallback_summary()
+
+    return results
+
+
 def _split_graph_nodes_for_enrichment(graph_nodes, role_nodes):
     """
     Split graph nodes into structural and role nodes for enrichment.
@@ -567,6 +672,78 @@ def _setup_weighted_analysis(weights_dict, classification,
         studyset_ancestors_roles = set()
 
     return studyset_leaves, weights_with_leaves, studyset_ancestors_all, studyset_ancestors_roles
+
+
+def _setup_weighted_narrow_analysis(weights_dict, classification,
+                                    narrow_background_leaves_json,
+                                    removed_leaves_csv, leaf_to_ancestors_map_file,
+                                    class_to_leaf_map, class_to_all_roles_map,
+                                    roles_to_leaves_map, parent_map_file,
+                                    expand_background=True):
+    """Extract leaves, propagate weights, find ancestors and roles, against a
+    narrow (organism-specific) background. Mirrors _setup_weighted_analysis,
+    using get_studyset_leaves_narrow (the same leaf resolution the Fisher
+    narrow-background path uses) instead of get_leaves.
+    """
+    normalized_weights_dict = {
+        normalize_id(cls): weight for cls, weight in weights_dict.items()
+    }
+    studyset_list = list(normalized_weights_dict.keys())
+
+    studyset_leaves, leaves_to_expand_background, parents_to_expand_background = get_studyset_leaves_narrow(
+        studyset_list, narrow_background_leaves_json, removed_leaves_csv, class_to_leaf_map
+    )
+    print(f"Study set leaves: {len(studyset_leaves)}")
+
+    # No structural_leaf_ids filter here: the Fisher narrow-background path
+    # (get_studyset_leaves_narrow) doesn't apply it either, so weight
+    # propagation stays consistent with how narrow-background leaves are resolved.
+    weights_with_leaves = _propagate_weights_to_leaves(
+        normalized_weights_dict, class_to_leaf_map, removed_leaves_csv
+    )
+    print(f"Weights with leaf propagation: {len(weights_with_leaves)} leaves have weights")
+
+    studyset_ancestors_all = get_ancestors_for_inputs(studyset_leaves, leaf_to_ancestors_map_file)
+    print(f"Number of study set ancestors: {len(studyset_ancestors_all)}")
+
+    if classification in ["functional", "full"]:
+        # Build expanded narrow leaf set (narrow background + any study-set
+        # leaves outside it), mirroring run_narrow_background_enrichment_analysis.
+        with open(narrow_background_leaves_json, 'r', encoding='utf-8') as f:
+            cached_narrow = json.load(f)
+        expanded_narrow_leaves = set(cached_narrow.get("narrow_leaves", []))
+        if expand_background and leaves_to_expand_background:
+            expanded_narrow_leaves.update(leaves_to_expand_background)
+
+        studyset_ancestors_roles = set()
+        for leaf in studyset_leaves:
+            if leaf in expanded_narrow_leaves:
+                studyset_ancestors_roles.update(class_to_all_roles_map.get(leaf, []))
+        for cls in studyset_ancestors_all:
+            leaf_descs = set(class_to_leaf_map.get(cls, []))
+            if leaf_descs and leaf_descs.intersection(expanded_narrow_leaves):
+                studyset_ancestors_roles.update(class_to_all_roles_map.get(cls, []))
+
+        with open(parent_map_file, 'r') as f:
+            parent_map = json.load(f)
+        roles_with_ancestors = set(studyset_ancestors_roles)
+        to_process = list(studyset_ancestors_roles)
+        while to_process:
+            role = to_process.pop(0)
+            for parent in parent_map.get(role, []):
+                if parent in roles_with_ancestors:
+                    continue
+                parent_leaves = set(roles_to_leaves_map.get(parent, []))
+                if parent_leaves and parent_leaves.intersection(expanded_narrow_leaves):
+                    roles_with_ancestors.add(parent)
+                    to_process.append(parent)
+        studyset_ancestors_roles = roles_with_ancestors
+        print(f"Number of roles (including ancestors): {len(studyset_ancestors_roles)}")
+    else:
+        studyset_ancestors_roles = set()
+
+    return (studyset_leaves, weights_with_leaves, studyset_ancestors_all, studyset_ancestors_roles,
+            leaves_to_expand_background, parents_to_expand_background)
 
 
 # ---------------------------------------------------------------------------
@@ -836,3 +1013,268 @@ def run_weighted_enrichment_analysis_plain_enrich_pruning_strategy(
     }
 
     return results, G
+
+
+# ---------------------------------------------------------------------------
+# run_weighted_narrow_background_enrichment_analysis
+# (mirrors run_narrow_background_enrichment_analysis in
+#  wikidata/narrow_background_fishers.py)
+# ---------------------------------------------------------------------------
+
+def run_weighted_narrow_background_enrichment_analysis(
+    weights_dict,
+    bonferroni_correct=False,
+    benjamini_hochberg_correct=True,
+    root_children_prune=False,
+    levels=2,
+    linear_branch_prune=False,
+    n=2,
+    high_p_value_prune=False,
+    p_value_threshold=0.05,
+    zero_degree_prune=False,
+    classification="structural",
+    narrow_background_leaves_json="data/human_entities_leaves.json",
+    expand_background=True,
+):
+    removed_leaves_csv          = "data/removed_leaf_classes_with_smiles.csv"
+    leaf_to_ancestors_map_file  = "data/removed_leaf_classes_to_ALL_parents_map.json"
+    class_to_leaf_map_file      = "data/class_to_leaf_descendants_map.json"
+    parent_map_file             = "data/chebi_parent_map.json"
+    class_to_all_roles_map_json = "data/class_to_all_roles_map.json"
+    roles_to_leaves_map_json    = "data/roles_to_leaves_map.json"
+
+    with open(class_to_leaf_map_file, 'r') as f:
+        class_to_leaf_map = json.load(f)
+    with open(class_to_all_roles_map_json, 'r') as f:
+        class_to_all_roles_map = json.load(f)
+    with open(roles_to_leaves_map_json, 'r') as f:
+        roles_to_leaves_map = json.load(f)
+
+    (studyset_leaves, weights_with_leaves, studyset_ancestors_all, studyset_ancestors_roles,
+     leaves_to_expand_background, parents_to_expand_background) = _setup_weighted_narrow_analysis(
+        weights_dict, classification,
+        narrow_background_leaves_json,
+        removed_leaves_csv, leaf_to_ancestors_map_file,
+        class_to_leaf_map, class_to_all_roles_map,
+        roles_to_leaves_map, parent_map_file,
+        expand_background,
+    )
+
+    G = create_graph_with_roles_and_structures(
+        studyset_leaves, studyset_ancestors_all,
+        studyset_ancestors_roles, parent_map_file,
+        class_to_all_roles_map, classification,
+    )
+    pruned_G = G.copy()
+    all_removed_nodes = set()
+
+    pruning_before_enrichment = root_children_prune or linear_branch_prune
+    if pruning_before_enrichment:
+        if root_children_prune:
+            print(f"Root children pruner activated, pruning {levels} levels from root")
+            t0 = time.time()
+            pruned_G, removed_nodes, _ = root_children_pruner(
+                pruned_G, levels, allow_re_execution=False, execution_count=0
+            )
+            print(f"Root children pruning: {time.time()-t0:.2f}s")
+            all_removed_nodes.update(removed_nodes)
+
+        if linear_branch_prune:
+            print(f"Linear branch pruner activated, n={n}")
+            pruned_G, removed_nodes = linear_branch_collapser_pruner_remove_less(pruned_G, n)
+            all_removed_nodes.update(removed_nodes)
+
+    structural_nodes_for_enrichment, role_nodes_for_enrichment = _split_graph_nodes_for_enrichment(
+        pruned_G.nodes(), studyset_ancestors_roles
+    )
+    studyset_ancestors = structural_nodes_for_enrichment
+    studyset_ancestors_roles_for_enrichment = role_nodes_for_enrichment
+    print(f"Structural nodes for enrichment (from graph): {len(studyset_ancestors)}")
+    print(f"Role nodes for enrichment (from graph): {len(studyset_ancestors_roles_for_enrichment)}")
+
+    enrichment_results = get_weighted_enrichment_values_narrow(
+        narrow_background_leaves_json,
+        classification,
+        studyset_leaves,
+        studyset_ancestors,
+        class_to_leaf_map,
+        class_to_all_roles_map,
+        roles_to_leaves_map,
+        studyset_ancestors_roles_for_enrichment,
+        weights_with_leaves,
+        leaves_to_expand_background,
+        expand_background,
+    )
+    _print_non_finite_pvalue_diagnostics(enrichment_results, "post-raw-enrichment")
+
+    if bonferroni_correct:
+        print("Applying Bonferroni correction...")
+        enrichment_results, _ = bonferroni_correction(enrichment_results)
+        _print_non_finite_pvalue_diagnostics(enrichment_results, "post-bonferroni")
+    elif benjamini_hochberg_correct:
+        print("Applying Benjamini-Hochberg FDR correction...")
+        enrichment_results = benjamini_hochberg_fdr_correction(enrichment_results)
+        _print_non_finite_pvalue_diagnostics(enrichment_results, "post-bh")
+
+    if high_p_value_prune:
+        print(f"High p-value pruner, threshold={p_value_threshold}")
+        t0 = time.time()
+        pruned_G, removed_nodes = high_p_value_branch_pruner(
+            pruned_G, enrichment_results, p_value_threshold
+        )
+        print(f"High p-value pruning: {time.time()-t0:.2f}s, removed {len(removed_nodes)}")
+        all_removed_nodes.update(removed_nodes)
+        for cls in removed_nodes:
+            enrichment_results.pop(cls, None)
+
+    if zero_degree_prune:
+        print("Zero-degree pruner activated...")
+        t0 = time.time()
+        pruned_G, removed_nodes = zero_degree_pruner(pruned_G)
+        print(f"Zero-degree pruning: {time.time()-t0:.2f}s, removed {len(removed_nodes)}")
+        all_removed_nodes.update(removed_nodes)
+        for cls in removed_nodes:
+            enrichment_results.pop(cls, None)
+
+    print("Final weighted enrichment results:")
+    print_enrichment_results(enrichment_results)
+    print(f"Total removed nodes: {len(all_removed_nodes)}")
+    _print_non_finite_pvalue_diagnostics(enrichment_results, "final-post-pruning")
+
+    results = {
+        "study_set": [id_to_name(c) for c in studyset_leaves],
+        "removed_nodes": [id_to_name(c) for c in all_removed_nodes],
+        "enrichment_results": {
+            id_to_name(cls): vals for cls, vals in enrichment_results.items()
+        },
+    }
+
+    return results, pruned_G, leaves_to_expand_background, parents_to_expand_background
+
+
+# ---------------------------------------------------------------------------
+# run_weighted_narrow_background_enrichment_analysis_plain_enrich_pruning_strategy
+# ---------------------------------------------------------------------------
+
+def run_weighted_narrow_background_enrichment_analysis_plain_enrich_pruning_strategy(
+    weights_dict,
+    levels=2,
+    n=0,
+    p_value_threshold=0.05,
+    classification="structural",
+    narrow_background_leaves_json="data/human_entities_leaves.json",
+    expand_background=True,
+):
+    removed_leaves_csv          = "data/removed_leaf_classes_with_smiles.csv"
+    leaf_to_ancestors_map_file  = "data/removed_leaf_classes_to_ALL_parents_map.json"
+    class_to_leaf_map_file      = "data/class_to_leaf_descendants_map.json"
+    parent_map_file             = "data/chebi_parent_map.json"
+    class_to_all_roles_map_json = "data/class_to_all_roles_map.json"
+    roles_to_leaves_map_json    = "data/roles_to_leaves_map.json"
+
+    with open(class_to_leaf_map_file, 'r') as f:
+        class_to_leaf_map = json.load(f)
+    with open(class_to_all_roles_map_json, 'r') as f:
+        class_to_all_roles_map = json.load(f)
+    with open(roles_to_leaves_map_json, 'r') as f:
+        roles_to_leaves_map = json.load(f)
+
+    (studyset_leaves, weights_with_leaves, studyset_ancestors, studyset_ancestors_roles,
+     leaves_to_expand_background, parents_to_expand_background) = _setup_weighted_narrow_analysis(
+        weights_dict, classification,
+        narrow_background_leaves_json,
+        removed_leaves_csv, leaf_to_ancestors_map_file,
+        class_to_leaf_map, class_to_all_roles_map,
+        roles_to_leaves_map, parent_map_file,
+        expand_background,
+    )
+
+    all_removed_nodes = set()
+
+    G = create_graph_with_roles_and_structures(
+        studyset_leaves, studyset_ancestors,
+        studyset_ancestors_roles, parent_map_file,
+        class_to_all_roles_map, classification,
+    )
+
+    structural_nodes_for_enrichment, role_nodes_for_enrichment = _split_graph_nodes_for_enrichment(
+        G.nodes(), studyset_ancestors_roles
+    )
+    print(f"Structural nodes for enrichment (from graph): {len(structural_nodes_for_enrichment)}")
+    print(f"Role nodes for enrichment (from graph): {len(role_nodes_for_enrichment)}")
+
+    enrichment_results = get_weighted_enrichment_values_narrow(
+        narrow_background_leaves_json,
+        classification,
+        studyset_leaves,
+        structural_nodes_for_enrichment,
+        class_to_leaf_map,
+        class_to_all_roles_map,
+        roles_to_leaves_map,
+        role_nodes_for_enrichment,
+        weights_with_leaves,
+        leaves_to_expand_background,
+        expand_background,
+    )
+
+    print("Enrichment results (raw):")
+    print_enrichment_results(enrichment_results)
+
+    enrichment_results = benjamini_hochberg_fdr_correction(enrichment_results)
+    print("After BH correction:")
+    print_enrichment_results(enrichment_results)
+
+    print("Starting pre-loop pruning phase.")
+    G, removed_nodes = high_p_value_branch_pruner(G, enrichment_results, p_value_threshold)
+    all_removed_nodes.update(removed_nodes)
+    print(f"High p-value pruner removed: {len(removed_nodes)}")
+
+    G, removed_nodes = linear_branch_collapser_pruner_remove_less(G, n)
+    all_removed_nodes.update(removed_nodes)
+    print(f"Linear branch pruner removed: {len(removed_nodes)}")
+
+    G, removed_nodes, _ = root_children_pruner(
+        G, levels, allow_re_execution=False, execution_count=0
+    )
+    all_removed_nodes.update(removed_nodes)
+    print(f"Root children pruner removed: {len(removed_nodes)}")
+
+    print("Starting loop pruning phase.")
+    size_before = G.number_of_nodes()
+    size_after = size_before
+    first_iteration = True
+    iteration = 0
+    current_enrichment = enrichment_results
+
+    while size_after < size_before or first_iteration:
+        size_before = size_after
+        iteration += 1
+        print(f"Loop iteration {iteration}")
+
+        current_enrichment = {
+            cls: vals for cls, vals in enrichment_results.items()
+            if cls not in all_removed_nodes and G.has_node(cls)
+        }
+        current_enrichment = benjamini_hochberg_fdr_correction(current_enrichment)
+
+        G, removed_nodes = high_p_value_branch_pruner(G, current_enrichment, p_value_threshold)
+        all_removed_nodes.update(removed_nodes)
+        print(f"High p-value pruner removed: {len(removed_nodes)}")
+
+        G, removed_nodes = zero_degree_pruner(G)
+        all_removed_nodes.update(removed_nodes)
+        print(f"Zero-degree pruner removed: {len(removed_nodes)}")
+
+        size_after = G.number_of_nodes()
+        first_iteration = False
+
+    print(f"Total removed nodes: {len(all_removed_nodes)}")
+    results = {
+        "study_set": [id_to_name(c) for c in studyset_leaves],
+        "removed_nodes": [id_to_name(c) for c in all_removed_nodes],
+        "enrichment_results": {
+            id_to_name(cls): vals for cls, vals in current_enrichment.items()
+        },
+    }
+
+    return results, G, leaves_to_expand_background, parents_to_expand_background

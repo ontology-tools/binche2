@@ -4,7 +4,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from flask import Flask, render_template, request, redirect, url_for, session, Response
 from fishers_calculations import run_enrichment_analysis, run_enrichment_analysis_plain_enrich_pruning_strategy
 from wikidata.narrow_background_fishers import run_narrow_background_enrichment_analysis, run_narrow_background_enrichment_analysis_plain_enrich_pruning_strategy
-from weighted_calculations import run_weighted_enrichment_analysis, run_weighted_enrichment_analysis_plain_enrich_pruning_strategy, auto_scale_weights
+from weighted_calculations import run_weighted_enrichment_analysis, run_weighted_enrichment_analysis_plain_enrich_pruning_strategy, run_weighted_narrow_background_enrichment_analysis, run_weighted_narrow_background_enrichment_analysis_plain_enrich_pruning_strategy, auto_scale_weights
 from visualitations_and_pruning import graph_to_cytospace_json
 import re
 import csv
@@ -389,9 +389,12 @@ def run_analysis():
 
         elif background in NARROW_BACKGROUND_LEAVES_JSON:
             if weights_dict:
-                print("Weights are not currently supported for narrow background analysis.")
-                return render_template('submission.html', user_study_set=raw_studyset, error_message="Weights are not currently supported for narrow background analysis. Please remove weights and try again.")
-
+                results, pruned_G, leaves_to_expand_background, parents_to_expand_background = run_weighted_narrow_background_enrichment_analysis_plain_enrich_pruning_strategy(
+                    weights_dict,
+                    classification=session.get('classification'),
+                    narrow_background_leaves_json=NARROW_BACKGROUND_LEAVES_JSON[background],
+                    expand_background=session.get('expand_background', True)
+                )
             else:
                 results, pruned_G, leaves_to_expand_background, parents_to_expand_background = run_narrow_background_enrichment_analysis_plain_enrich_pruning_strategy(
                     studyset_list,
@@ -399,17 +402,18 @@ def run_analysis():
                     narrow_background_leaves_json=NARROW_BACKGROUND_LEAVES_JSON[background],
                     expand_background=session.get('expand_background', True)
                 )
-                graph_json_file = f'website/static/data/graph_{session["session_id"]}.json'
-                graph_to_cytospace_json(pruned_G, graph_json_file, results)
-                session['graph_file'] = f'graph_{session["session_id"]}.json'
 
-                session['pruning'] = {
-                    'method': 'plain_enrich'
-                }
+            graph_json_file = f'website/static/data/graph_{session["session_id"]}.json'
+            graph_to_cytospace_json(pruned_G, graph_json_file, results)
+            session['graph_file'] = f'graph_{session["session_id"]}.json'
 
-                session['unresolved_smiles'] = unresolved_smiles
+            session['pruning'] = {
+                'method': 'plain_enrich'
+            }
 
-                return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'), leaves_to_expand_background=leaves_to_expand_background, parents_to_expand_background=parents_to_expand_background, expand_background=session.get('expand_background', True), background=session.get('background', 'full'))
+            session['unresolved_smiles'] = unresolved_smiles
+
+            return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'), leaves_to_expand_background=leaves_to_expand_background, parents_to_expand_background=parents_to_expand_background, expand_background=session.get('expand_background', True), background=session.get('background', 'full'))
 
     # PRUNING OPTIONS
     root_children_prune = request.form.get('root_children_prune') == 'true'
@@ -432,9 +436,22 @@ def run_analysis():
     # Use weighted analysis if weights are present, otherwise use standard analysis
     if weights_dict:
         if background in NARROW_BACKGROUND_LEAVES_JSON:
-            print("Weights are not currently supported for narrow background analysis.")
-            return render_template('submission.html', user_study_set=raw_studyset, error_message="Weights are not currently supported for narrow background analysis. Please remove weights and try again.")
-        results, pruned_G = run_weighted_enrichment_analysis(weights_dict,
+            results, pruned_G, leaves_to_expand_background, parents_to_expand_background = run_weighted_narrow_background_enrichment_analysis(
+                                                weights_dict,
+                                                levels=levels,
+                                                n=linear_branch_n,
+                                                p_value_threshold=p_value_threshold,
+                                                classification=session.get('classification'),
+                                                root_children_prune=root_children_prune,
+                                                linear_branch_prune=linear_branch_prune,
+                                                high_p_value_prune=high_p_value_prune,
+                                                zero_degree_prune=zero_degree_prune,
+                                                bonferroni_correct=bonferroni_correct,
+                                                benjamini_hochberg_correct=benjamini_hochberg_correct,
+                                                narrow_background_leaves_json=NARROW_BACKGROUND_LEAVES_JSON[background],
+                                                expand_background=session.get('expand_background', True))
+        else:
+            results, pruned_G = run_weighted_enrichment_analysis(weights_dict,
                                             levels=levels,
                                             n=linear_branch_n,
                                             p_value_threshold=p_value_threshold,
