@@ -1,5 +1,6 @@
 from platform import node
 from load_chebi import load_chebi, load_ontology
+from rdkit import Chem
 import xml.etree.ElementTree as ET
 import os
 import csv
@@ -9,6 +10,13 @@ import time
 from collections import defaultdict
 
 """This script filters the ontology to remove classes that have SMILES and that are leaves"""
+
+def _has_wildcard_atom(smiles):
+    """True if the SMILES fails to parse or contains a wildcard/dummy atom (eg ChEBI's R-group placeholder '*')."""
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return True
+    return any(atom.GetAtomicNum() == 0 for atom in mol.GetAtoms()) # the dummy atom '*' has atomic number 0 in RDKit
 
 ancestor_cache = {}
 def get_all_ancestors(chebi_ontology, cls, visited=None):
@@ -185,26 +193,28 @@ def find_leaf_classes_with_smiles_and_deprecated(
             cls_str = str(cls)
             is_deprecated = False
             has_smiles = False
+            smiles_value = None
 
-            for axiom in axioms: 
+            for axiom in axioms:
                 component = axiom.component # The component of the axiom can eg be SubClassOf, AnnotationAssertion, etc.
                 if type(component).__name__ == 'AnnotationAssertion': # Check if axiom is an annotation, e.g. a SMILES or deprecated tag
                     ann = component.ann # Get the annotation
                     if hasattr(ann, 'ap'): # Check if annotation has an annotation property (ap). This can eg tell us if it is a SMILES string
                         prop_str = str(ann.ap) # Converts property IRI to string for easier comparison
-                        
+
                         if prop_str == deprecated_prop_str: # Check if deprecated
                             is_deprecated = True
                             k += 1
                             if k % 1000 == 0:
                                 print(f"Found {k} deprecated classes so far...")
-                        
+
                         if prop_str == smiles_prop_str: # Check if SMILES property
                             has_smiles = True
+                            smiles_value = str(ann.av)
                             i += 1
                             if i % 1000 == 0:
                                 print(f"Found {i} classes with SMILES so far...")
-            
+
 
             # Add to correct lists
             if is_deprecated:
@@ -212,7 +222,8 @@ def find_leaf_classes_with_smiles_and_deprecated(
                 continue  # Skip further checks for deprecated classes
             if has_smiles:
                 classes_with_smiles.append(cls_str)
-                if cls_str not in subclass_map or len(subclass_map[cls_str]) == 0: # Check if leaf class (no subclasses)
+                is_childless = cls_str not in subclass_map or len(subclass_map[cls_str]) == 0 # Check if leaf class (no subclasses)
+                if is_childless and not _has_wildcard_atom(smiles_value): # Exclude wildcard/R-group placeholder SMILES (eg ChEBI's '*') from leaf status
 
                     leaf_classes_with_smiles.append(cls_str)
 
