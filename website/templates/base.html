@@ -38,7 +38,7 @@
 
         {% block body %}{% endblock %}
 
-    <footer style="background-color: #f8f9fa; padding: 30px 40px; margin-top: 20px; border-top: 1px solid #dee2e6;">
+    <footer style="background-color: #f8f9fa; padding: 30px 40px; margin-top: 20px; border-top: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: end;">
         <div style="max-width: 1200px;">
             <p style="margin: 0; font-size: 0.95rem; line-height: 1.6;">
                 This tool is developed by the <a href="https://hastingslab.org/" style="color: #0f808d; text-decoration: none;">Human-Centered Health AI group</a> 
@@ -51,6 +51,7 @@
                 and we will look into it as soon as possible.
             </p>
         </div>
+        <span style="font-size: 0.95rem; color: gray;">Data updated: {{data_version}}</span>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
