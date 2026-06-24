@@ -32,7 +32,9 @@ import time
 start_time = time.time()
 
 """
-A script for creating all necessary files for the project.
+A script for creating all necessary files for the project. 
+The old data is moved to a timestamped folder.
+If there are more than three folders with old data, the oldest ones are deleted to keep only the three most recent.
 """
 
 
@@ -128,6 +130,37 @@ def finalize_folder_structure():
     # Rename data_new to data
     if os.path.exists("data_new"):
         rename_folder("data_new", "data")
+
+def cleanup_old_data_folders(max_folders=3):
+    """
+    Keep only the most recent 'max_folders' of old data folders and delete the rest.
+
+    Args:
+        max_folders (int): Maximum number of old data folders to keep
+    """
+    import re
+
+    # Match folders named "data_last_used_YYYY.MM.DD" or "data_last_used_YYYY.MM.DD_N"
+    pattern = re.compile(r"data_last_used_(\d{4}\.\d{2}\.\d{2})(?:_(\d+))?$")
+
+    old_data_folders = []
+    for f in os.listdir("."):
+        if not os.path.isdir(f):
+            continue
+        match = pattern.match(f)
+        if match:
+            date_str, counter = match.groups()
+            old_data_folders.append((f, date_str, int(counter) if counter else 0))
+
+    # Sort by the date (and counter, for same-day folders) encoded in the name, newest first
+    old_data_folders.sort(key=lambda item: (item[1], item[2]), reverse=True)
+
+    # Keep only the most recent 'max_folders'
+    folders_to_delete = old_data_folders[max_folders:]
+
+    for folder, _, _ in folders_to_delete:
+        print(f"Deleting old data folder: {folder}")
+        shutil.rmtree(folder)
 
 if __name__ == "__main__":
     stage_timings = []
@@ -399,7 +432,10 @@ if __name__ == "__main__":
         taxon_label="arabidopsis_thaliana",
     )
 
-   
+    ### Clean up old data folders, keeping only the most recent ones
+    print("Cleaning up old data folders...")
+    _run_stage("cleanup_old_data_folders", stage_timings, cleanup_old_data_folders)
+
     print("All files created successfully!")
     end_time = time.time()
     elapsed_time = end_time - start_time
