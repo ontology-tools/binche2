@@ -1,8 +1,6 @@
 import os
 import networkx as nx
-# import matplotlib.pyplot as plt
 from load_chebi import load_ontology, load_chebi
-from matplotlib.patches import Ellipse
 import xml.etree.ElementTree as ET
 from tqdm import tqdm
 from math import inf

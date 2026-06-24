@@ -117,6 +117,18 @@ def cleanup_old_graph_files(max_age_hours=24):
             pass
 
 
+# Load last update time
+def get_data_version():
+    try:
+        with open(os.path.join(BASE_DIR, 'data_version.txt'), 'r') as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return 'unknown'
+
+@app.context_processor
+def inject_data_version():
+    return dict(data_version=get_data_version())
+
 @app.route('/')
 def index():
     return render_template('index.html')
