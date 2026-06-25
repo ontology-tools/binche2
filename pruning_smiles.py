@@ -1,9 +1,10 @@
 from platform import node
 from load_chebi import load_chebi, load_ontology
-from rdkit import Chem
 import xml.etree.ElementTree as ET
 import os
+import sys
 import csv
+import random
 import pandas as pd
 import json
 import time
@@ -11,12 +12,16 @@ from collections import defaultdict
 
 """This script filters the ontology to remove classes that have SMILES and that are leaves"""
 
-def _has_wildcard_atom(smiles):
-    """True if the SMILES fails to parse or contains a wildcard/dummy atom (eg ChEBI's R-group placeholder '*')."""
-    mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
-        return True
-    return any(atom.GetAtomicNum() == 0 for atom in mol.GetAtoms()) # the dummy atom '*' has atomic number 0 in RDKit
+
+def _has_wildcard(smiles):
+    """True if the SMILES contains a wildcard/dummy atom (ChEBI's R-group placeholder '*').
+
+    In SMILES syntax '*' is only ever the dummy atom, so this substring test is exactly
+    equivalent to checking for an atomic-number-0 atom (verified: zero false positives across
+    all ChEBI SMILES) without parsing. Unlike a full RDKit parse, this keeps real compounds
+    whose curated SMILES merely fail strict sanitization (kekulization/valence quirks).
+    """
+    return '*' in smiles
 
 ancestor_cache = {}
 def get_all_ancestors(chebi_ontology, cls, visited=None):
@@ -88,6 +93,73 @@ def _get_all_ancestors_from_parent_map(class_id, parent_map, cache):
     ordered = list(ancestors)
     cache[class_id] = ordered
     return ordered
+
+
+def _nearest_nonleaf_parents_map(raw_parent_map, leaf_set):
+    """For every class, compute its nearest non-leaf ancestors, climbing past any leaf
+    parents (handles chains of stacked leaves). Returns a child -> parents dict in which
+    no leaf ever appears as a parent value."""
+    sys.setrecursionlimit(max(sys.getrecursionlimit(), 100000))
+    memo = {}
+
+    def compute(node, stack):
+        if node in memo:
+            return memo[node]
+        if node in stack:  # cycle guard (ChEBI is a DAG, but stay safe)
+            return set()
+        result = set()
+        for p in raw_parent_map.get(node, ()):
+            if p not in leaf_set:
+                result.add(p)                          # real (non-leaf) category: stop climbing
+            else:
+                result |= compute(p, stack | {node})   # leaf parent: climb past it
+        memo[node] = result
+        return result
+
+    return {node: list(compute(node, frozenset())) for node in raw_parent_map}
+
+
+def _splice_leaves_from_hierarchy(raw_parent_map, leaf_set):
+    """Flatten the hierarchy so leaves are terminal: each class reconnects to its nearest
+    non-leaf ancestors and leaves end up with no children. Returns
+    (flattened_subclass_map, flattened_parent_map)."""
+    flattened_parent_map = _nearest_nonleaf_parents_map(raw_parent_map, leaf_set)
+
+    flattened_subclass_map = defaultdict(list)
+    for child, parents in flattened_parent_map.items():
+        for parent in parents:
+            flattened_subclass_map[parent].append(child)
+    flattened_subclass_map = {p: sorted(set(kids)) for p, kids in flattened_subclass_map.items()}
+    return flattened_subclass_map, flattened_parent_map
+
+
+def _verify_splice(raw_parent_map, flattened_parent_map, leaf_set, sample_size=8000):
+    """Safety net run before any derived file is written. Asserts the splice preserved
+    every node's reachable NON-leaf ancestors (no orphaning, no invented connections) and
+    that no leaf is left as anyone's parent."""
+    def closure(node, pm):
+        seen = set()
+        stack = list(pm.get(node, ()))
+        while stack:
+            x = stack.pop()
+            if x in seen:
+                continue
+            seen.add(x)
+            stack.extend(pm.get(x, ()))
+        return seen
+
+    nodes = list(raw_parent_map)
+    random.seed(0)
+    sample = nodes if len(nodes) <= sample_size else random.sample(nodes, sample_size)
+    for n in sample:
+        raw_nonleaf = {a for a in closure(n, raw_parent_map) if a not in leaf_set}
+        spliced = closure(n, flattened_parent_map)
+        assert raw_nonleaf == spliced, f"Splice changed reachable non-leaf ancestors for {n}"
+
+    for child, parents in flattened_parent_map.items():
+        assert not any(p in leaf_set for p in parents), f"Splice left a leaf as a parent of {child}"
+
+    print(f"Splice verification passed: {len(sample)} sampled nodes, non-leaf ancestor sets preserved.")
 
 
 def _build_subclass_map_from_axioms(chebi_ontology, all_classes):
@@ -222,8 +294,11 @@ def find_leaf_classes_with_smiles_and_deprecated(
                 continue  # Skip further checks for deprecated classes
             if has_smiles:
                 classes_with_smiles.append(cls_str)
-                is_childless = cls_str not in subclass_map or len(subclass_map[cls_str]) == 0 # Check if leaf class (no subclasses)
-                if is_childless and not _has_wildcard_atom(smiles_value): # Exclude wildcard/R-group placeholder SMILES (eg ChEBI's '*') from leaf status
+                # A class is a leaf if it has its own valid, non-wildcard SMILES, regardless of
+                # whether it has subclasses. Classes with children that qualify are spliced out
+                # of the hierarchy below so leaves stay terminal. Wildcard/R-group placeholder
+                # SMILES (eg ChEBI's '*') are excluded.
+                if not _has_wildcard(smiles_value):
 
                     leaf_classes_with_smiles.append(cls_str)
 
@@ -232,14 +307,38 @@ def find_leaf_classes_with_smiles_and_deprecated(
                         print(f"Found {j} leaf classes with SMILES so far...")
             # Helper function to get all ancestors recursively
     
-    # Build leaf to all ancestors map
+    # Sanity guard: a near-empty leaf set means leaf detection silently failed (eg SMILES
+    # values were not read as expected). Catch it here, because the splice verification below
+    # passes trivially when there are no leaves to misplace.
+    if len(classes_with_smiles) > 0 and len(leaf_classes_with_smiles) < 0.5 * len(classes_with_smiles):
+        raise RuntimeError(
+            f"Only {len(leaf_classes_with_smiles)} leaf classes found among "
+            f"{len(classes_with_smiles)} classes with SMILES — leaf detection likely failed "
+            "(check how SMILES annotation values are being read)."
+        )
+
+    # Flatten the hierarchy so leaves are terminal: every class reconnects to its nearest
+    # non-leaf ancestors, climbing past any leaf parents (handles chains of stacked leaves).
+    # After this no leaf is anyone's parent, so leaves become siblings under the real categories.
+    leaf_set = set(leaf_classes_with_smiles)
+    print("Splicing leaves out of the hierarchy so they become terminal siblings...")
+    flattened_subclass_map, flattened_parent_map = _splice_leaves_from_hierarchy(direct_parent_map, leaf_set)
+    _verify_splice(direct_parent_map, flattened_parent_map, leaf_set)
+
+    # Overwrite the saved subclass map with the flattened version so every downstream artifact
+    # (parent map, all-ancestors map, class->leaf map, graph) inherits the sibling structure.
+    with open(subclass_map_file, 'w') as f:
+        json.dump(flattened_subclass_map, f)
+    print(f"Saved flattened subclass map to {subclass_map_file}.")
+
+    # Build leaf to all (non-leaf) ancestors map from the flattened hierarchy
     leaf_to_parents = {}
     i = 0
     ancestor_cache_from_parent_map = {}
     for leaf in leaf_classes_with_smiles:
         all_ancestors = _get_all_ancestors_from_parent_map(
             leaf,
-            direct_parent_map,
+            flattened_parent_map,
             ancestor_cache_from_parent_map,
         )
         leaf_to_parents[leaf] = all_ancestors

@@ -28,6 +28,7 @@ from wikidata.narrow_background_fishers import gather_narrow_leaves
 
 
 import time
+import json
 
 start_time = time.time()
 
@@ -278,13 +279,18 @@ if __name__ == "__main__":
         class_to_all_roles_json,
     )
 
-    ### Identify structural vs functional classes (in-memory, no OWL files needed)
+    ### Identify structural vs functional classes (fast path: traverse the precomputed
+    ### subclass map instead of the slow per-node ontology API). The flattened map written by
+    ### find_leaf_classes gives identical descendant sets for the (non-leaf) roots.
     print("Identifying structural vs functional classes...")
+    with open(subclass_map_file, "r") as f:
+        subclass_map_for_classification = json.load(f)
     structural_classes, functional_classes, unknown_classes = _run_stage(
         "identify_structural_vs_functional",
         stage_timings,
         identify_structural_vs_functional,
         chebi_ontology,
+        subclass_map_for_classification,
     )
     
     print(f"Identified {len(structural_classes)} structural classes")

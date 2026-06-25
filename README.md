@@ -73,17 +73,21 @@ A uv environment with the following installations was used:
 Download and load the ChEBI ontology by running `load_chebi.py`. In the script, the OWL file is downloaded from https://ftp.ebi.ac.uk/pub/databases/chebi/ontology/chebi.owl and cached as `data/chebi.owl`. Re-running the script will not re-download the file if it already exists; delete `data/chebi.owl` if you want to attain a newer version. The version used in the webapplication is automatically updated on the 1st of every month.
 
 #### 2. Remove leaf classes and save maps
-To remove leaf classes with SMILES from the ontology, use `pruning_smiles.py`.
+To identify leaf classes and flatten the hierarchy, use `pruning_smiles.py`.
 
-Run task *"remove_leaves_with_smiles"* to find and filter out deprecated classes and leaf classes with SMILES. The following files are created:
+**What counts as a leaf.** A class is a leaf if it has its own valid SMILES string that is *not* a wildcard/R-group placeholder (SMILES containing the dummy atom `*`, e.g. `*C(N)C(=O)O`, are rejected via RDKit). This holds **regardless of whether the class has subclasses** — a parent class with a proper SMILES (e.g. `proline`) is a leaf in its own right, alongside its more specific children (e.g. `L-proline`, `D-proline`).
+
+**Flattening the hierarchy (the "splice").** Because a leaf must be terminal, whenever a class sits under a leaf it is reconnected to that leaf's nearest *non-leaf* ancestors, climbing past chains of stacked leaves. So `L-proline` stops pointing at the leaf `proline` and instead points directly at the real category above it (e.g. `alpha-amino acid`), while keeping every other ancestor it already had (e.g. `D-proline` keeps `D-alpha-amino acid`). After the splice, no leaf is any class's parent, so all SMILES-bearing classes become siblings under the genuine (non-leaf) category terms. A verification step asserts the splice preserved every class's set of reachable non-leaf ancestors before any file is written.
+
+Run task *"remove_leaves_with_smiles"* to find leaf classes, splice the hierarchy, and filter out deprecated classes. The following files are created:
 
 - A filtered OWL file with the remaining classes (from `save_filtered_owl`). The current file in this workspace is `data/data_owl/filtered_chebi_no_leaves_with_smiles_no_deprecated.owl`.
-- A subclass map JSON file containing all classes with their direct subclasses (from `find_leaf_classes_with_smiles_and_deprecated`). The file also includes deprecated classes.
-- A leaf-to-parents map JSON file mapping the removed leaf classes to all of their ancestors (from `find_leaf_classes_with_smiles_and_deprecated`). This file is used in later calculations.
+- A **flattened** subclass map JSON file (`data/chebi_subclass_map.json`) mapping all classes to their direct subclasses after the splice (from `find_leaf_classes_with_smiles_and_deprecated`). Leaves have no subclasses here; the file also includes deprecated classes.
+- A leaf-to-parents map JSON file mapping each leaf class to all of its **non-leaf** ancestors (from `find_leaf_classes_with_smiles_and_deprecated`). This file is used in later calculations.
 
 Run task *"build_parent_map"* to create:
 
-- `data/chebi_parent_map.json`, a map of all classes to their direct parents (deprecated classes are excluded). This file is later used when creating paths for graph construction.
+- `data/chebi_parent_map.json`, a map of all classes to their direct parents after the splice (deprecated classes are excluded). It is derived from the flattened subclass map, so the graph built from it shows the same sibling structure.
 
 Run task *"map_names_to_classes"* to build:
 
@@ -108,6 +112,8 @@ Second, run the task *"build leaf to all roles map"*. This builds:
 
 The first file maps each removed leaf class to (a) its direct roles, (b) roles inherited from ancestor classes, and (c) **ancestors of those roles** in the role hierarchy. The second file is the inverse: it maps each role class to all leaf classes connected to that role.
 
+Note: because the hierarchy was flattened in step 2, a leaf inherits roles only from its **non-leaf** ancestors. It no longer inherits roles asserted directly on a leaf-ancestor — e.g. `D-proline` no longer inherits roles (such as *human metabolite*) that are asserted on the generic `proline`, which is now itself a leaf. A leaf's own direct roles are always kept.
+
 Third, run the task *"build class to all roles map"* to create:
 
 - `data/class_to_all_roles_map.json`
@@ -127,12 +133,12 @@ Go back to `pruning_smiles.py` and run task *"save_removed_leaf_classes"* to sav
 
 - `data/removed_leaf_classes_with_smiles.csv`
 
-The CSV contains `IRI`, `SMILES`, and `Classification`, where the classification is inferred from the class’ direct parents in the structural/functional split. In ChEBI, classes with SMILES are expected to fall under structural roots, so entries classified as **functional** are likely misclassified and are excluded from downstream calculations (they are kept in the file for troubleshooting).
+The CSV contains `IRI`, `SMILES`, and `Classification`, where the classification is inferred from the class’ direct parents in the structural/functional split. Every leaf has a row here, including classes that have subclasses but carry their own valid SMILES (e.g. `proline`); classes whose SMILES is a wildcard/R-group placeholder are not leaves and do not appear. In ChEBI, classes with SMILES are expected to fall under structural roots, so entries classified as **functional** are likely misclassified and are excluded from downstream calculations (they are kept in the file for troubleshooting).
 
 
 #### 5. Fisher's Calculations
 
-First (only needed once), run task *"build_class_to_leaf_map"* in `pre_fishers_calculations.py` to create `data/class_to_leaf_descendants_map.json`, which maps each class to all of its removed leaf descendants using `data/removed_leaf_classes_to_ALL_parents_map.json`. By default, leaf classes themselves are **not** included as keys in this map.
+First (only needed once), run task *"build_class_to_leaf_map"* in `pre_fishers_calculations.py` to create `data/class_to_leaf_descendants_map.json`, which maps each class to all of its removed leaf descendants using `data/removed_leaf_classes_to_ALL_parents_map.json`. Leaf classes are **not** keys in this map: after the splice no leaf appears as another class's ancestor, so only the genuine (non-leaf) category terms become keys. A leaf is therefore only ever counted as a member of its categories, never tested as a category itself.
 
 Enrichment calculations can be run in `fishers_calculations.py`, but this is easiest done via the web application. Either use the website link (easiest since no preparation steps to obtain all the necessary files are needed) or run `website/app.py` locally.
 

@@ -37,29 +37,58 @@ def get_descendants(ontology, root_iri):
     return descendants
 
 
-def identify_structural_vs_functional(chebi_ontology):
+def _descendants_from_subclass_map(subclass_map, root_iri):
+    """Collect all descendants of root_iri using a precomputed parent -> direct-children map.
+
+    Pure dict lookups, so this avoids the per-node ontology API calls that make
+    get_descendants() the dominant cost when classifying the whole ontology.
+    """
+    descendants = set()
+    to_visit = [root_iri]
+    while to_visit:
+        current = to_visit.pop()
+        for child in subclass_map.get(current, ()):
+            if child not in descendants:
+                descendants.add(child)
+                to_visit.append(child)
+    return descendants
+
+
+def identify_structural_vs_functional(chebi_ontology, subclass_map=None):
     """Classify classes as structural or functional based on ChEBI hierarchy.
-    
+
     Returns sets of IRI strings.
+
+    If `subclass_map` (a parent IRI -> list of direct-child IRIs dict) is given, descendants
+    are collected from it instead of via the ontology API — dramatically faster. The flattened
+    subclass map is fine to pass here: the splice preserves reachability from every non-leaf
+    class, and the structural/functional roots are non-leaves, so each root's descendant set
+    (and therefore the classification) is identical to using the raw hierarchy.
     """
     all_classes = set(str(cls) for cls in chebi_ontology.get_classes())
     print(f"Total classes in ontology: {len(all_classes)}")
 
+    if subclass_map is not None:
+        print("Collecting descendants from precomputed subclass map (fast path)...")
+        descend = lambda root: _descendants_from_subclass_map(subclass_map, root)
+    else:
+        descend = lambda root: get_descendants(chebi_ontology, root)
+
     # Identify functional hierarchies
     print("Collecting descendants of 'role' (functional)...")
-    functional_classes = get_descendants(chebi_ontology, ROLE_ROOT_IRI)
+    functional_classes = descend(ROLE_ROOT_IRI)
     # Add the root itself
     functional_classes.add(ROLE_ROOT_IRI)
     print(f"Functional classes: {len(functional_classes)}")
 
     # Identify structural hierarchies
     print("Collecting descendants of 'molecular entity' (structural)...")
-    structural_classes_molecular = get_descendants(chebi_ontology, MOLECULAR_ROOT_IRI)
+    structural_classes_molecular = descend(MOLECULAR_ROOT_IRI)
     # Add the root itself
     structural_classes_molecular.add(MOLECULAR_ROOT_IRI)
     print(f"Structural classes with molecular entity root: {len(structural_classes_molecular)}")
     print("Collecting descendants of 'chemical substance' (structural)...")
-    structural_classes_chemical = get_descendants(chebi_ontology, CHEMICAL_ROOT_IRI)
+    structural_classes_chemical = descend(CHEMICAL_ROOT_IRI)
     # Add the root itself
     structural_classes_chemical.add(CHEMICAL_ROOT_IRI)
     print(f"Structural classes with chemical substance root: {len(structural_classes_chemical)}")
