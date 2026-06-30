@@ -17,13 +17,14 @@ from prepare_role_calculations import (
 from pruning_split_up_structure import identify_structural_vs_functional
 from pre_fishers_calculations import build_class_to_leaf_map
 
-from wikidata.get_wikidata_lotus import create_wikidata_output_files, keep_taxon_compounds
+from wikidata.get_wikidata_lotus import connect_lotus_csv_to_chebi_ids
 from wikidata.get_inchikeys import convert_smiles_file
 from hmdb.extract_hmdb import extract_hmdb_to_file
 from hmdb.filter_hmdb_statuses import filter_hmdb_statuses_main
 from wikidata.find_missing_chebis import run_find_missing_chebis
 from wikidata.combine_human_datasets import combine_datasets
 from wikidata.narrow_background_fishers import gather_narrow_leaves
+from BiGG.get_model import download_model_json, gather_recon3d_leaves
 
 
 
@@ -333,7 +334,20 @@ if __name__ == "__main__":
         print(f"Copied {hmdb_xml_src} to {hmdb_xml_dst}")
     else:
         raise FileNotFoundError(f"{hmdb_xml_src} not found. Please download it before running.")
-    
+
+    # Copy manually downloaded LOTUS explorer CSVs to data_new before folder rename
+    print("Copying LOTUS explorer CSVs to temporary data folder...")
+    lotus_csv_files = {
+        "data/lotus_homo_sapiens.csv": "data_new/lotus_homo_sapiens.csv",
+        "data/lotus_arabidopsis_thaliana.csv": "data_new/lotus_arabidopsis_thaliana.csv",
+    }
+    for lotus_src, lotus_dst in lotus_csv_files.items():
+        if os.path.exists(lotus_src):
+            shutil.copy2(lotus_src, lotus_dst)
+            print(f"Copied {lotus_src} to {lotus_dst}")
+        else:
+            raise FileNotFoundError(f"{lotus_src} not found. Please download it before running.")
+
 
     ### Finalize folder structure: rename old data and move data_new to data
     print("Finalizing folder structure...")
@@ -349,22 +363,22 @@ if __name__ == "__main__":
         "data/removed_leaf_classes_with_inchikeys.csv",
     )
 
-    print("Creating Wikidata output files...")
+    print("Matching ChEBI IDs for LOTUS Homo sapiens compounds...")
     _run_stage(
-        "create_wikidata_output_files",
+        "connect_lotus_homo_sapiens_to_chebi_ids",
         stage_timings,
-        create_wikidata_output_files,
-        include_download=True,
+        connect_lotus_csv_to_chebi_ids,
+        "data/lotus_homo_sapiens.csv",
+        "data/wikidata/created/lotus_homo_sapiens_with_chebi_ids.tsv",
     )
 
-    print("Filtering Wikidata compounds for Arabidopsis thaliana...")
+    print("Matching ChEBI IDs for LOTUS Arabidopsis thaliana compounds...")
     _run_stage(
-        "filter_wikidata_arabidopsis_thaliana",
+        "connect_lotus_arabidopsis_thaliana_to_chebi_ids",
         stage_timings,
-        keep_taxon_compounds,
-        "data/wikidata/created/compounds_with_chebi_ids.tsv",
-        "data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana.tsv",
-        "arabidopsis_thaliana",
+        connect_lotus_csv_to_chebi_ids,
+        "data/lotus_arabidopsis_thaliana.csv",
+        "data/wikidata/created/lotus_arabidopsis_thaliana_with_chebi_ids.tsv",
     )
 
     print("Creating HMDB output file...")
@@ -383,20 +397,20 @@ if __name__ == "__main__":
         filter_hmdb_statuses_main,
     )
 
-    print("Finding missing ChEBI IDs for Wikidata (Homo sapiens)...")
+    print("Finding missing ChEBI IDs for LOTUS (Homo sapiens)...")
     _run_stage(
-        "find_missing_chebis_wikidata_hs",
+        "find_missing_chebis_lotus_hs",
         stage_timings,
         run_find_missing_chebis,
-        "wikidata_hs",
+        "lotus_hs",
     )
 
-    print("Finding missing ChEBI IDs for Wikidata (Arabidopsis thaliana)...")
+    print("Finding missing ChEBI IDs for LOTUS (Arabidopsis thaliana)...")
     _run_stage(
-        "find_missing_chebis_wikidata_at",
+        "find_missing_chebis_lotus_at",
         stage_timings,
         run_find_missing_chebis,
-        "wikidata_at",
+        "lotus_at",
     )
 
     print("Finding missing ChEBI IDs for HMDB...")
@@ -431,11 +445,31 @@ if __name__ == "__main__":
         "gather_narrow_leaves_arabidopsis_thaliana",
         stage_timings,
         gather_narrow_leaves,
-        compounds_tsv="data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana_updatedchebis.tsv",
+        compounds_tsv="data/wikidata/created/lotus_arabidopsis_thaliana_with_chebi_ids_updatedchebis.tsv",
         leaves_csv="data/removed_leaf_classes_with_smiles.csv",
         class_to_leaf_map="data/class_to_leaf_descendants_map.json",
         output_json="data/arabidopsis_thaliana_leaves.json",
         taxon_label="arabidopsis_thaliana",
+    )
+
+    print("Downloading Recon3D model...")
+    _run_stage(
+        "download_recon3d_model",
+        stage_timings,
+        download_model_json,
+        "Recon3D",
+        "data/Recon3D.json",
+    )
+
+    print("Gathering narrow leaf classes (Endogenous human / Recon3D)...")
+    _run_stage(
+        "gather_narrow_leaves_endogenous_human",
+        stage_timings,
+        gather_recon3d_leaves,
+        model_json_path="data/Recon3D.json",
+        leaves_csv="data/removed_leaf_classes_with_smiles.csv",
+        class_to_leaf_map_json="data/class_to_leaf_descendants_map.json",
+        output_json="data/recon3d_leaves.json",
     )
 
     ### Clean up old data folders, keeping only the most recent ones

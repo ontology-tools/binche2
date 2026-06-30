@@ -745,6 +745,14 @@
                                 Arabidopsis thaliana background
                             </label>
                         </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="background" id="background_endogenous_human" value="endogenous_human"
+                            {% if background == 'endogenous_human' %} checked {% endif %}>
+                            <label class="form-check-label" for="background_endogenous_human">
+                                Endogenous human background
+                            </label>
+                            <button type="button" class="btn btn-sm ms-2 info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Endogenous Human Background" data-bs-content="Derived from Recon3D, a genome-scale reconstruction of human metabolism (BiGG Models). Includes only metabolites that participate in modelled human metabolic reactions, unlike the broader 'Human background', which also includes externally-sourced human-associated compounds (eg drugs, diet).">
+                        </div>
                     </div>
                     <hr class="my-3" style="opacity: 0.3;">
 

@@ -121,6 +121,14 @@
 {% endfor %}
 </ul>
 {% endif %}
+{% if ambiguous_smiles_matches %}
+<p class="muted-log"><strong>Ambiguous SMILES matches</strong> (structure asserted by multiple ChEBI terms — lowest ChEBI ID used):</p>
+<ul class="muted-log" style="margin-left: 20px;">
+{% for match in ambiguous_smiles_matches %}
+    <li>{{ match.smiles }} &rarr; used {{ match.chosen }} (also asserted by: {{ match.alternatives | join(', ') }})</li>
+{% endfor %}
+</ul>
+{% endif %}
 
 <script> // Not ideal since this is mixing Jinja2 template syntax (server-side) with JavaScript (client-side) but it works for now.
 document.getElementById('downloadCsv').addEventListener('click', function(e) {

@@ -28,6 +28,7 @@ LOCAL_LOOKUP_FILE = os.path.join(BASE_DIR, 'data', 'removed_leaf_classes_with_in
 NARROW_BACKGROUND_LEAVES_JSON = {
     'human': 'data/human_entities_leaves.json',
     'arabidopsis_thaliana': 'data/arabidopsis_thaliana_leaves.json',
+    'endogenous_human': 'data/recon3d_leaves.json',
 }
 
 
@@ -35,6 +36,21 @@ def _clean_lookup_value(value):
     if value is None:
         return ''
     return str(value).strip().strip('"')
+
+
+def _canonical_smiles(smiles):
+    """RDKit-canonical form of a SMILES string, or None if it can't be parsed.
+
+    ChEBI's asserted SMILES aren't guaranteed to be in any particular canonical
+    form, so comparing raw strings misses matches between differently-written
+    SMILES for the same molecule. Canonicalizing both the lookup table and any
+    incoming SMILES through RDKit makes exact-match comparison toolkit-consistent.
+    """
+    try:
+        mol = Chem.MolFromSmiles(smiles)
+    except Exception:
+        return None
+    return Chem.MolToSmiles(mol) if mol is not None else None
 
 
 def _normalize_chebi_id(raw_value):
@@ -57,9 +73,43 @@ def _normalize_chebi_id(raw_value):
     return value
 
 
+def _chebi_sort_key(chebi_id):
+    """Numeric sort key for 'CHEBI_12345' ids, so collision tie-breaks are by
+    ChEBI ID number rather than CSV row order (which is incidental).
+    """
+    try:
+        return int(chebi_id.rsplit('_', 1)[-1])
+    except (ValueError, AttributeError):
+        return float('inf')
+
+
+def _resolve_lookup_collisions(candidates, label):
+    """Pick a deterministic winner (lowest ChEBI ID) for each key asserted by more
+    than one ChEBI term, and return both the winner map and a {key: [all_ids]} map
+    of only the keys that actually collided, so callers can surface the ones that
+    were dropped. Logs a single summary line rather than one line per collision,
+    since this table has thousands of them; per-match ambiguity is surfaced to
+    end users in the Processing Summary instead (see convert_smiles_to_chebi).
+    """
+    resolved = {}
+    collisions = {}
+    for key, chebi_ids in candidates.items():
+        ordered = sorted(chebi_ids, key=_chebi_sort_key)
+        resolved[key] = ordered[0]
+        if len(ordered) > 1:
+            collisions[key] = ordered
+    if collisions:
+        print(
+            f"Warning: {len(collisions)} distinct {label} values in {LOCAL_LOOKUP_FILE} "
+            f"are each asserted by more than one ChEBI term; using the lowest ChEBI ID "
+            f"as a deterministic tie-break for each."
+        )
+    return resolved, collisions
+
+
 def _load_local_smiles_and_inchikey_maps():
-    smiles_to_chebi = {}
-    inchikey_to_chebi = {}
+    smiles_candidates = {}
+    inchikey_candidates = {}
 
     with open(LOCAL_LOOKUP_FILE, 'r', encoding='utf-8', newline='') as handle:
         reader = csv.DictReader(handle)
@@ -94,17 +144,24 @@ def _load_local_smiles_and_inchikey_maps():
             smiles = _clean_lookup_value(row.get(smiles_column))
             inchikey_value = _clean_lookup_value(row.get(inchikey_column)) if inchikey_column else ''
 
-            if smiles and smiles not in smiles_to_chebi:
-                smiles_to_chebi[smiles] = chebi_id
+            if smiles:
+                ids = smiles_candidates.setdefault(smiles, [])
+                if chebi_id not in ids:
+                    ids.append(chebi_id)
             if inchikey_value:
                 inchikey_key = inchikey_value.upper()
-                if inchikey_key not in inchikey_to_chebi:
-                    inchikey_to_chebi[inchikey_key] = chebi_id
+                ids = inchikey_candidates.setdefault(inchikey_key, [])
+                if chebi_id not in ids:
+                    ids.append(chebi_id)
 
-    return smiles_to_chebi, inchikey_to_chebi
+    smiles_to_chebi, smiles_collisions = _resolve_lookup_collisions(smiles_candidates, 'SMILES')
+    inchikey_to_chebi, inchikey_collisions = _resolve_lookup_collisions(inchikey_candidates, 'InChIKey')
+
+    return smiles_to_chebi, inchikey_to_chebi, smiles_collisions, inchikey_collisions
 
 
-LOCAL_SMILES_TO_CHEBI, LOCAL_INCHIKEY_TO_CHEBI = _load_local_smiles_and_inchikey_maps()
+(LOCAL_SMILES_TO_CHEBI, LOCAL_INCHIKEY_TO_CHEBI,
+ LOCAL_SMILES_COLLISIONS, LOCAL_INCHIKEY_COLLISIONS) = _load_local_smiles_and_inchikey_maps()
 
 def cleanup_old_graph_files(max_age_hours=24):
     """Remove graph files older than max_age_hours"""
@@ -160,9 +217,10 @@ def parse_studyset(studyset: str):
     studyset_list = []
     weights_dict = {}
     unresolved_smiles = []
+    ambiguous_smiles_matches = []
 
     if not studyset:
-        return studyset_list, weights_dict, unresolved_smiles
+        return studyset_list, weights_dict, unresolved_smiles, ambiguous_smiles_matches
 
     def normalize_id(raw_id: str) -> str:
         value = raw_id.strip().replace('"', "")
@@ -182,6 +240,16 @@ def parse_studyset(studyset: str):
         smiles_chars = set('cCnNoOpPsSFfIiBbr[]()=#@+-\\/')
         return any(c in smiles_chars for c in value)
 
+    def record_ambiguous(smiles, ambiguous_match):
+        if ambiguous_match is None:
+            return
+        chosen, all_ids = ambiguous_match
+        ambiguous_smiles_matches.append({
+            'smiles': smiles,
+            'chosen': chosen,
+            'alternatives': [cid for cid in all_ids if cid != chosen],
+        })
+
     # Split by lines first to support optional weights per line
     for line in studyset.splitlines():
         line = line.strip()
@@ -195,9 +263,10 @@ def parse_studyset(studyset: str):
                 weight = float(parts[1])
                 # Check if first part is SMILES
                 if is_smiles(parts[0]):
-                    chebi_ids, was_resolved = convert_smiles_to_chebi(parts[0])
+                    chebi_ids, was_resolved, ambiguous_match = convert_smiles_to_chebi(parts[0])
                     if not was_resolved:
                         unresolved_smiles.append(parts[0])
+                    record_ambiguous(parts[0], ambiguous_match)
                     # Apply the same weight to all resulting ChEBI IDs
                     for chebi_id in chebi_ids:
                         class_id = normalize_id(chebi_id)
@@ -214,9 +283,10 @@ def parse_studyset(studyset: str):
         # Fallback: treat all parts as IDs without weights
         for part in parts:
             if is_smiles(part):
-                chebi_ids, was_resolved = convert_smiles_to_chebi(part)
+                chebi_ids, was_resolved, ambiguous_match = convert_smiles_to_chebi(part)
                 if not was_resolved:
                     unresolved_smiles.append(part)
+                record_ambiguous(part, ambiguous_match)
                 for chebi_id in chebi_ids:
                     class_id = normalize_id(chebi_id)
                     studyset_list.append(class_id)
@@ -224,37 +294,55 @@ def parse_studyset(studyset: str):
                 class_id = normalize_id(part)
                 studyset_list.append(class_id)
 
-    return studyset_list, weights_dict, unresolved_smiles
+    return studyset_list, weights_dict, unresolved_smiles, ambiguous_smiles_matches
 
 def convert_smiles_to_chebi(smiles_string):
-    """Convert a single SMILES string to ChEBI IDs. Returns a tuple (chebi_ids_list, was_resolved)."""
+    """Convert a single SMILES string to ChEBI IDs.
+
+    Returns (chebi_ids_list, was_resolved, ambiguous_match). ambiguous_match is
+    None unless the matched SMILES/InChIKey is asserted by more than one ChEBI
+    term in the local lookup table, in which case it's (chosen_chebi_id,
+    all_chebi_ids) so the caller can surface the ambiguity to the user.
+    """
     chebi_ids = []
     was_resolved = False
+    ambiguous_match = None
     cleaned_smiles = _clean_lookup_value(smiles_string)
+    try:
+        mol = Chem.MolFromSmiles(cleaned_smiles)
+    except Exception as error:
+        print(f"Warning: failed to parse SMILES {cleaned_smiles}: {error}")
+        mol = None
+    canonical_smiles = Chem.MolToSmiles(mol) if mol is not None else None
 
-    # First try a direct SMILES lookup against the local leaf-class table.
-    local_chebi_id = LOCAL_SMILES_TO_CHEBI.get(cleaned_smiles)
+    # First try a direct SMILES lookup against the local leaf-class table, comparing
+    # canonical forms so the match doesn't depend on how either SMILES was written.
+    lookup_key = canonical_smiles or cleaned_smiles
+    local_chebi_id = LOCAL_SMILES_TO_CHEBI.get(lookup_key)
     if local_chebi_id:
         chebi_ids.append(local_chebi_id.replace('_', ':', 1))
         was_resolved = True
+        if lookup_key in LOCAL_SMILES_COLLISIONS:
+            ambiguous_match = (local_chebi_id, LOCAL_SMILES_COLLISIONS[lookup_key])
         print(f"Found local ChEBI ID from exact SMILES match: {local_chebi_id} for SMILES {cleaned_smiles}")
-        return chebi_ids, was_resolved
+        return chebi_ids, was_resolved, ambiguous_match
 
     # If no direct SMILES match exists, try InChIKey -> ChEBI using RDKit to
     # compute the InChIKey for the submitted SMILES.
     try:
-        mol = Chem.MolFromSmiles(cleaned_smiles)
         if mol is not None:
             user_inchikey = inchi.MolToInchiKey(mol).upper()
             local_chebi_id = LOCAL_INCHIKEY_TO_CHEBI.get(user_inchikey)
             if local_chebi_id:
                 chebi_ids.append(local_chebi_id.replace('_', ':', 1))
                 was_resolved = True
+                if user_inchikey in LOCAL_INCHIKEY_COLLISIONS:
+                    ambiguous_match = (local_chebi_id, LOCAL_INCHIKEY_COLLISIONS[user_inchikey])
                 print(
                     f"Found local ChEBI ID from InChIKey match: {local_chebi_id} "
                     f"for SMILES {cleaned_smiles} (InChIKey {user_inchikey})"
                 )
-                return chebi_ids, was_resolved
+                return chebi_ids, was_resolved, ambiguous_match
     except Exception as error:
         print(f"Warning: failed to compute InChIKey for SMILES {cleaned_smiles}: {error}")
 
@@ -309,9 +397,9 @@ def convert_smiles_to_chebi(smiles_string):
 
         else:
             print(f"No direct ChEBI ID found from lookup for SMILES {cleaned_smiles}, excluding from analysis.")
-            
-    
-    return chebi_ids, was_resolved
+
+
+    return chebi_ids, was_resolved, ambiguous_match
  
 def map_p_value_correction_method(method_name):
     if method_name == 'bonferroni':
@@ -335,7 +423,7 @@ def run_analysis():
     if not raw_studyset:
         return redirect(url_for('submission'))
     # Convert multi-line or comma-separated input into a list
-    studyset_list, weights_dict, unresolved_smiles = parse_studyset(raw_studyset)
+    studyset_list, weights_dict, unresolved_smiles, ambiguous_smiles_matches = parse_studyset(raw_studyset)
     
     # Auto-scale weights if present (only scales up if max < 1000)
     # if weights_dict:
@@ -396,8 +484,9 @@ def run_analysis():
             }
 
             session['unresolved_smiles'] = unresolved_smiles
+            session['ambiguous_smiles_matches'] = ambiguous_smiles_matches
 
-            return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'), expand_background=session.get('expand_background', True), background=session.get('background', 'full'))
+            return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, ambiguous_smiles_matches=ambiguous_smiles_matches, smiles_option=session.get('smiles_option'), expand_background=session.get('expand_background', True), background=session.get('background', 'full'))
 
         elif background in NARROW_BACKGROUND_LEAVES_JSON:
             if weights_dict:
@@ -424,8 +513,9 @@ def run_analysis():
             }
 
             session['unresolved_smiles'] = unresolved_smiles
+            session['ambiguous_smiles_matches'] = ambiguous_smiles_matches
 
-            return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'), leaves_to_expand_background=leaves_to_expand_background, parents_to_expand_background=parents_to_expand_background, expand_background=session.get('expand_background', True), background=session.get('background', 'full'))
+            return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, ambiguous_smiles_matches=ambiguous_smiles_matches, smiles_option=session.get('smiles_option'), leaves_to_expand_background=leaves_to_expand_background, parents_to_expand_background=parents_to_expand_background, expand_background=session.get('expand_background', True), background=session.get('background', 'full'))
 
     # PRUNING OPTIONS
     root_children_prune = request.form.get('root_children_prune') == 'true'
@@ -513,8 +603,9 @@ def run_analysis():
     }
 
     session['unresolved_smiles'] = unresolved_smiles
+    session['ambiguous_smiles_matches'] = ambiguous_smiles_matches
 
-    return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, smiles_option=session.get('smiles_option'), leaves_to_expand_background=leaves_to_expand_background, parents_to_expand_background=parents_to_expand_background, expand_background=session.get('expand_background', True), background=session.get('background', 'full'))
+    return render_template('results.html', results=results, graph_json_file=graph_json_file, unresolved_smiles=unresolved_smiles, ambiguous_smiles_matches=ambiguous_smiles_matches, smiles_option=session.get('smiles_option'), leaves_to_expand_background=leaves_to_expand_background, parents_to_expand_background=parents_to_expand_background, expand_background=session.get('expand_background', True), background=session.get('background', 'full'))
 
 @app.route('/graph')
 def graph():
