@@ -15,6 +15,16 @@ def smiles_to_inchikey(smiles, starcount=0):
     inchi = MolToInchi(mol)
     return InchiToInchiKey(inchi), starcount
 
+def canonical_smiles(smiles):
+    """RDKit-canonical form of a SMILES string, or None if it can't be parsed.
+
+    ChEBI's asserted SMILES aren't guaranteed to be in any particular canonical
+    form, so baking the RDKit-canonical form into this file lets the website's
+    exact-string lookup match incoming SMILES regardless of how they were written.
+    """
+    mol = Chem.MolFromSmiles(smiles)
+    return Chem.MolToSmiles(mol) if mol is not None else None
+
 # Example
 smiles = "[H]C(=Nc1ccccc1NS(=O)(=O)c1ccc(C)cc1)c1ccccc1NS(=O)(=O)c1ccc(C)cc1" 
 inchikey = smiles_to_inchikey(smiles)
@@ -29,6 +39,8 @@ def convert_smiles_file(input_file, output_file):
     print(f"Read {len(df)} rows from {input_file}")
     # Strip triple quotes from the SMILES column
     df['SMILES'] = df['SMILES'].str.strip('"')
+    # Canonicalize so the website's exact-string lookup is toolkit-consistent
+    df['SMILES'] = df['SMILES'].apply(lambda x: canonical_smiles(x) or x)
     # Convert SMILES to InChIKey and store in a new column
     df['InChIKey'] = df['SMILES'].apply(lambda x: smiles_to_inchikey(x, starcount)[0])
     starcount = df['SMILES'].apply(lambda x: smiles_to_inchikey(x, starcount)[1]).sum()

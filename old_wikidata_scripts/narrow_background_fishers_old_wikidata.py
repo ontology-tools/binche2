@@ -791,16 +791,15 @@ if __name__ == "__main__":
     TAXON_LABEL = "homo_sapiens"  # "homo_sapiens" or "arabidopsis_thaliana"
 
     # Each taxon's compounds_tsv comes from a different upstream pipeline:
-    # homo_sapiens combines HMDB + the LOTUS explorer export (combine_human_datasets.py),
-    # while other taxa use the LOTUS explorer export directly (find_missing_chebis.py,
-    # "lotus_at" preset) since it's already filtered to a single taxon.
+    # homo_sapiens combines HMDB + Wikidata (combine_human_datasets.py), while
+    # other taxa are Wikidata-only (find_missing_chebis.py, "arabidopsis_thaliana" preset).
     NARROW_BACKGROUND_CONFIGS = {
         "homo_sapiens": {
             "compounds_tsv": "data/combined_hmdb_wikidata.tsv",
             "output_json": "data/human_entities_leaves.json",
         },
         "arabidopsis_thaliana": {
-            "compounds_tsv": "data/wikidata/created/lotus_arabidopsis_thaliana_with_chebi_ids_updatedchebis.tsv",
+            "compounds_tsv": "data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana_updatedchebis.tsv",
             "output_json": "data/arabidopsis_thaliana_leaves.json",
         },
     }

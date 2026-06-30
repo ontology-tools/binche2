@@ -294,18 +294,6 @@ def run_find_missing_chebis(
             "smiles_columns": ["canonicalSmiles", "isomericSmiles"],
             "chebi_column": "chebi_id",
         },
-        "lotus_hs": {
-            "input": "data/wikidata/created/lotus_homo_sapiens_with_chebi_ids.tsv",
-            "output": "data/wikidata/created/lotus_homo_sapiens_with_chebi_ids_updatedchebis.tsv",
-            "smiles_columns": ["compound_smiles_conn", "compound_smiles_iso"],
-            "chebi_column": "chebi_id",
-        },
-        "lotus_at": {
-            "input": "data/wikidata/created/lotus_arabidopsis_thaliana_with_chebi_ids.tsv",
-            "output": "data/wikidata/created/lotus_arabidopsis_thaliana_with_chebi_ids_updatedchebis.tsv",
-            "smiles_columns": ["compound_smiles_conn", "compound_smiles_iso"],
-            "chebi_column": "chebi_id",
-        },
     }
 
     if source not in SOURCE_PRESETS:
@@ -348,18 +336,6 @@ def main_find_missing_chebis(source):
         "smiles_columns": ["canonicalSmiles", "isomericSmiles"],
         "chebi_column": "chebi_id",
     },
-    "lotus_hs": {
-        "input": "data/wikidata/created/lotus_homo_sapiens_with_chebi_ids.tsv",
-        "output": "data/wikidata/created/lotus_homo_sapiens_with_chebi_ids_updatedchebis.tsv",
-        "smiles_columns": ["compound_smiles_conn", "compound_smiles_iso"],
-        "chebi_column": "chebi_id",
-    },
-    "lotus_at": {
-        "input": "data/wikidata/created/lotus_arabidopsis_thaliana_with_chebi_ids.tsv",
-        "output": "data/wikidata/created/lotus_arabidopsis_thaliana_with_chebi_ids_updatedchebis.tsv",
-        "smiles_columns": ["compound_smiles_conn", "compound_smiles_iso"],
-        "chebi_column": "chebi_id",
-    },
     }
 
     parser = argparse.ArgumentParser(
@@ -367,7 +343,7 @@ def main_find_missing_chebis(source):
     )
     parser.add_argument(
         "--source",
-        choices=("wikidata_hs", "hmdb", "wikidata_at", "lotus_hs", "lotus_at"),
+        choices=("wikidata_hs", "hmdb", "wikidata_at"),
         default=source,
         help="Use built-in defaults for selected source (default: wikidata_hs).",
     )

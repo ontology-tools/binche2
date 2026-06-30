@@ -26,7 +26,7 @@ from pathlib import Path
 
 
 HMDB_INPUT = "data/hmdb_metabolites_extract_quantified_detected_updatedchebis.tsv"
-WIKIDATA_INPUT = "data/wikidata/created/lotus_homo_sapiens_with_chebi_ids_updatedchebis.tsv"
+WIKIDATA_INPUT = "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens_updatedchebis.tsv"
 OUTPUT_FILE = "data/combined_hmdb_wikidata.tsv"
 
 
@@ -80,10 +80,10 @@ def normalize_chebi_ids(raw_value: str | None) -> str:
 
 
 def pick_preferred_smiles(row: dict[str, str]) -> str:
-    """Prefer the connectivity SMILES for Wikidata/LOTUS rows, then the isomeric one."""
+    """Prefer canonicalSmiles for Wikidata rows, then isomericSmiles."""
 
-    canonical = _clean(row.get("compound_smiles_conn"))
-    isomeric = _clean(row.get("compound_smiles_iso"))
+    canonical = _clean(row.get("canonicalSmiles"))
+    isomeric = _clean(row.get("isomericSmiles"))
 
     if canonical:
         return canonical.split("|")[0].strip()
@@ -92,12 +92,11 @@ def pick_preferred_smiles(row: dict[str, str]) -> str:
     return ""
 
 
-def wikidata_id_suffix(compound_id: str | None) -> str:
-    """LOTUS explorer CSVs give the bare Wikidata Q-id number (e.g. "100276118")."""
-    value = _clean(compound_id)
-    if not value:
+def wikidata_id_suffix(wikidata_iri: str | None) -> str:
+    iri = _clean(wikidata_iri)
+    if not iri:
         return ""
-    return value if value.startswith("Q") else f"Q{value}"
+    return iri.rsplit("/", 1)[-1]
 
 
 def _merge_chebi_source(existing: str, new_value: str) -> str:
@@ -196,7 +195,7 @@ def combine_datasets(
             total_counts["wikidata"] += 1
             chebi_id = normalize_chebi_ids(row.get("chebi_id"))
             smiles = pick_preferred_smiles(row)
-            compound_id = wikidata_id_suffix(row.get("compound"))
+            compound_id = wikidata_id_suffix(row.get("wikidataId"))
             chebi_source = _clean(row.get("chebi_source"))
 
             if not chebi_id:
