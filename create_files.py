@@ -18,6 +18,7 @@ from pruning_split_up_structure import identify_structural_vs_functional
 from pre_fishers_calculations import build_class_to_leaf_map
 
 from wikidata.get_wikidata_lotus import connect_lotus_csv_to_chebi_ids
+from wikidata.get_lotus import download_lotus_homo_sapiens, download_lotus_arabidopsis_thaliana
 from wikidata.get_inchikeys import convert_smiles_file
 from hmdb.extract_hmdb import extract_hmdb_to_file
 from hmdb.filter_hmdb_statuses import filter_hmdb_statuses_main
@@ -335,18 +336,20 @@ if __name__ == "__main__":
     else:
         raise FileNotFoundError(f"{hmdb_xml_src} not found. Please download it before running.")
 
-    # Copy manually downloaded LOTUS explorer CSVs to data_new before folder rename
-    print("Copying LOTUS explorer CSVs to temporary data folder...")
-    lotus_csv_files = {
-        "data/lotus_homo_sapiens.csv": "data_new/lotus_homo_sapiens.csv",
-        "data/lotus_arabidopsis_thaliana.csv": "data_new/lotus_arabidopsis_thaliana.csv",
-    }
-    for lotus_src, lotus_dst in lotus_csv_files.items():
-        if os.path.exists(lotus_src):
-            shutil.copy2(lotus_src, lotus_dst)
-            print(f"Copied {lotus_src} to {lotus_dst}")
-        else:
-            raise FileNotFoundError(f"{lotus_src} not found. Please download it before running.")
+    # Download LOTUS explorer CSVs from Wikidata (via QLever) into data_new
+    print("Downloading LOTUS explorer CSVs...")
+    _run_stage(
+        "download_lotus_homo_sapiens",
+        stage_timings,
+        download_lotus_homo_sapiens,
+        "data_new/lotus_homo_sapiens.csv",
+    )
+    _run_stage(
+        "download_lotus_arabidopsis_thaliana",
+        stage_timings,
+        download_lotus_arabidopsis_thaliana,
+        "data_new/lotus_arabidopsis_thaliana.csv",
+    )
 
 
     ### Finalize folder structure: rename old data and move data_new to data
