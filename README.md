@@ -22,7 +22,7 @@ Then specify the target of enrichment:
 For multiple hypothesis testing correction, p-value correction methods are available. The options are Benjamini-Hochberg, Bonferroni, and None. Benjamini-Hochberg is recommended.
 
 ### Pruning Strategies
-Pruning options are available to make the graph less cluttered. The following pruners are available:
+Pruning options are available to make the graph less cluttered. The following pruners are available and found in visualitations_and_pruning.py:
 
 * **Root Children Pruner:** Removes the roots and their children up to a defined level (number of levels being an adaptable parameter). This allows removal of more general, and less meaningful, entities in the ontology. For example, levels set to 2 will remove the roots and one level of their descendants.
 
@@ -61,6 +61,20 @@ There are options to choose the layout of the graph, which nodes are shown, and 
 ## Human background
 
 Compounds from HMDB and Wikidata (LOTUS) were mapped to ChEBI leaf classes to serve as a background for enrichment. Matching to a ChEBI ID was attempted in this order: (1) a ChEBI ID already present in the source data, (2) an exact SMILES match against the local table of ChEBI leaf classes (Wikidata only), (3) an InChIKey lookup against the same local table, (4) the Chebifier API, which performs both a direct lookup and parent-class classification — for parent-class matches, the deepest class in the ChEBI hierarchy was kept to avoid overly broad annotations. Where a matched ChEBI ID corresponded to a non-leaf class in the ontology, it was expanded to its leaf descendants; classes with more than 150 leaf descendants were excluded to prevent high-level classes from disproportionately inflating the background. The resulting set of leaf classes were used to form the narrow background used in the enrichment analysis.
+
+## Endogenous human background (Recon3D)
+
+A second, narrower human background was built from [Recon3D](http://bigg.ucsd.edu/models/Recon3D), a genome-scale reconstruction of human metabolism, downloaded as JSON from [BiGG Models](http://bigg.ucsd.edu/). Unlike the Human background above, this one is restricted to metabolites that participate in modelled human metabolic reactions, so it excludes externally-sourced human-associated compounds (e.g. drugs, diet).
+
+Recon3D represents each metabolite once per cellular compartment it appears in (e.g. `10fthf_c`, `10fthf_m` for the cytosolic and mitochondrial pools of the same compound), so compartment-specific entries sharing a base BiGG ID were first collapsed into a single compound record — these always carry identical formula, charge, and database cross-references, confirming they are the same chemical species. This reduced Recon3D's 5,835 metabolite entries to 2,797 unique compounds.
+
+Each compound's listed ChEBI ID(s) were then resolved to leaf classes as follows:
+
+1. If any listed ChEBI ID is already a leaf, **all** such leaf candidates were kept. BiGG often lists several ChEBI IDs for one compound (e.g. different protonation or tautomer states), and these are typically genuinely distinct structures rather than duplicates, so none were discarded in favour of a single "primary" one.
+2. If none of the listed IDs is a leaf, each was expanded to its leaf descendants, excluding any class with more than 150 leaf descendants (the same cutoff used for the Human background, to avoid over-generic classes).
+3. For compounds with no ChEBI annotation at all, a ChEBI cross-reference was attempted via [UniChem](https://www.ebi.ac.uk/unichem/), first by InChIKey, then by HMDB ID (Recon3D stores HMDB IDs in an older 5-digit format, which was zero-padded to UniChem's expected 7-digit format before lookup). Any ChEBI IDs found this way were resolved to leaves using rules 1–2 above.
+
+Compounds for which none of the above resolved to a leaf were left out of the background. In practice these are largely abstract macromolecule/generic placeholders (e.g. `Rtotal` fatty-acyl chains, cytochromes, thioredoxin, procollagen) rather than discrete chemical structures, so they would not have been usable in a ChEBI structure-based background regardless of the matching method.
 
 ## Workflow
 
@@ -143,71 +157,85 @@ First (only needed once), run task *"build_class_to_leaf_map"* in `pre_fishers_c
 Enrichment calculations can be run in `fishers_calculations.py`, but this is easiest done via the web application. Either use the website link (easiest since no preparation steps to obtain all the necessary files are needed) or run `website/app.py` locally.
 
 #### 6. Needed for human dataset
-1. Extract Lotus compunds and create files with create_wikidata_output_files() in `wikidata/get_wikidata_lotus.py`
 
-Files created:
+1. Download LOTUS compound–taxon data from Wikidata via the QLever SPARQL endpoint using `wikidata/get_lotus.py`. This is run automatically by `create_files.py`, but can also be run standalone:
 
-data/wikidata/created/compounds_with_chebi_ids.tsv
-
-data/wikidata/created/compounds_with_chebi_ids_homo_sapiens.tsv
-- To be used in later steps
-
-2. Extract HMDB compunds and create files using create_hmdb_output_file() [or extract_hmdb_to_file if imported] in `hmdb/extract_hmdb.py`. run using `jobs/run_extract_hmdb.sh` or 
-
-OBSERVE however that `data/hmdb_metabolites.xml` is needed for the function to work and is downloaded from https://hmdb.ca/downloads. The XML file named 'All Metabolites' from 2021-11-02 was used. 
-
-Output: 
-- hmdb_metabolites_extract.tsv
-
-3. `hmdb/filter_hmdb_statuses.py` needs the tsv file created in the previous step for filtering to only keep compunds with status "quantified" and "detected" using filter_hmdb_statuses_main()
-
-Output: data/hmdb_metabolites_extract_quantified_detected.tsv
-
-4. `wikidata/find_missing_chebis.py` (run via `jobs/run_find_missing_chebis.sh [source]`) finds missing CHEBI IDs for the lotus and hmdb files by running main_find_missing_chebis(source) where source is one of the presets in `SOURCE_PRESETS`: "wikidata_hs" (Wikidata, Homo sapiens), "hmdb", or "wikidata_at" (Wikidata, Arabidopsis thaliana). Alternatively run run_find_missing_chebis("hmdb"). This function is safer to import.
-
-CHEBI ID matches to the CHEBI background are attempted in this order
-
-- direct ChEBI matches (Lotus)
-- direct SMILES matches
-- Inchikey matches
-- Chebifier
-
-Output (depending on chosen source):
-- "data/wikidata/created/compounds_with_chebi_ids_homo_sapiens_updatedchebis.tsv"
-- "data/hmdb_metabolites_extract_quantified_detected_updatedchebis.tsv"
-- "data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana_updatedchebis.tsv"
-
-5. In `wikidata/combine_human_datasets.py`, the output sources from the previous step are combined with combine_datasets(). If no CHEBI ID exists, the row is dropped. 
+```bash
+python wikidata/get_lotus.py
+```
 
 Output:
-"data/combined_hmdb_wikidata.tsv"
+- `data/lotus_homo_sapiens.csv`
+- `data/lotus_arabidopsis_thaliana.csv`
 
-6. Create a file with the human leaf classes in `wikidata/narrow_background_fishers.py` with gather_narrow_leaves(). 
+2. Connect the LOTUS CSVs to ChEBI IDs using `connect_lotus_csv_to_chebi_ids()` in `wikidata/get_wikidata_lotus.py`.
+
+Output:
+- `data/wikidata/created/lotus_homo_sapiens_with_chebi_ids.tsv`
+- `data/wikidata/created/lotus_arabidopsis_thaliana_with_chebi_ids.tsv`
+
+3. Extract HMDB compounds using `extract_hmdb_to_file()` in `hmdb/extract_hmdb.py`.
+
+`data/hmdb_metabolites.xml` is required and must be downloaded manually from https://hmdb.ca/downloads (use the 'All Metabolites' XML).
+
+Output:
+- `data/hmdb_metabolites_extract.tsv`
+
+4. Filter HMDB to only keep compounds with status "quantified" or "detected" using `filter_hmdb_statuses_main()` in `hmdb/filter_hmdb_statuses.py`.
+
+Output: `data/hmdb_metabolites_extract_quantified_detected.tsv`
+
+5. Find missing ChEBI IDs using `run_find_missing_chebis(source)` in `wikidata/find_missing_chebis.py` (also runnable via `jobs/run_find_missing_chebis.sh [source]`). The `source` argument must be one of the presets in `SOURCE_PRESETS`: `"lotus_hs"`, `"lotus_at"`, or `"hmdb"`.
+
+ChEBI ID matching is attempted in this order:
+- Direct ChEBI matches (LOTUS)
+- Exact SMILES match against ChEBI leaf classes
+- InChIKey match against ChEBI leaf classes
+- Chebifier API
+
+Output (depending on source):
+- `data/wikidata/created/lotus_homo_sapiens_with_chebi_ids_updatedchebis.tsv`
+- `data/wikidata/created/lotus_arabidopsis_thaliana_with_chebi_ids_updatedchebis.tsv`
+- `data/hmdb_metabolites_extract_quantified_detected_updatedchebis.tsv`
+
+6. Combine HMDB and LOTUS Homo sapiens sources using `combine_datasets()` in `wikidata/combine_human_datasets.py`. Rows with no ChEBI ID are dropped.
+
+Output: `data/combined_hmdb_wikidata.tsv`
+
+7. Create a file with the human leaf classes using `gather_narrow_leaves()` in `wikidata/narrow_background_fishers.py`.
 
 Files needed:
-compounds_tsv = "data/combined_hmdb_wikidata.tsv"
-leaves_csv = "data/removed_leaf_classes_with_smiles.csv"
-class_to_leaf_map = "data/class_to_leaf_descendants_map.json"
-taxon_label = "homo_sapiens" (recorded in the output JSON, purely descriptive)
+- `compounds_tsv = "data/combined_hmdb_wikidata.tsv"`
+- `leaves_csv = "data/removed_leaf_classes_with_smiles.csv"`
+- `class_to_leaf_map = "data/class_to_leaf_descendants_map.json"`
+- `taxon_label = "homo_sapiens"` (recorded in the output JSON for traceability)
 
-Output:
-output_json = "data/human_entities_leaves.json" 
+Output: `data/human_entities_leaves.json`
 
 #### Narrow background for a single Wikidata taxon (e.g. Arabidopsis thaliana)
 
-This is the same workflow as above, but since there is only one source (Wikidata), steps 2, 3, and 5 (HMDB extraction/filtering and combining datasets) are skipped entirely:
+This is the same workflow as above, but since there is only one source (Wikidata), steps 3, 4, and 6 (HMDB extraction/filtering and combining datasets) are skipped entirely.
 
-1. Reuse the existing `data/wikidata/created/compounds_with_chebi_ids.tsv` from step 1 (no need to re-download or re-run the SMILES matching). Filter it to the chosen taxon with `keep_taxon_compounds()` in `wikidata/get_wikidata_lotus.py`, passing a `taxon_label` that must be a key in the `TAXA` dict.
+1. The Arabidopsis thaliana LOTUS CSV (`data/lotus_arabidopsis_thaliana.csv`) and its ChEBI-matched TSV (`data/wikidata/created/lotus_arabidopsis_thaliana_with_chebi_ids.tsv`) are already produced in steps 1–2 above.
 
-Output: `data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana.tsv`
+2. Fill in any still-missing ChEBI IDs using the `"lotus_at"` preset in `wikidata/find_missing_chebis.py`.
 
-2. Fill in any still-missing ChEBI IDs using the "wikidata_at" preset in `wikidata/find_missing_chebis.py`, e.g. `jobs/run_find_missing_chebis.sh wikidata_at`.
+Output: `data/wikidata/created/lotus_arabidopsis_thaliana_with_chebi_ids_updatedchebis.tsv`
 
-Output: `data/wikidata/created/compounds_with_chebi_ids_arabidopsis_thaliana_updatedchebis.tsv`
-
-3. Build the leaf classes with `gather_narrow_leaves()` in `wikidata/narrow_background_fishers.py` (set `TAXON_LABEL = "arabidopsis_thaliana"` in its `__main__` block), passing the file from step 2 as `compounds_tsv` and `taxon_label="arabidopsis_thaliana"` (just for traceability in the output file).
+3. Build the leaf classes with `gather_narrow_leaves()` in `wikidata/narrow_background_fishers.py`, passing the file from step 2 as `compounds_tsv` and `taxon_label="arabidopsis_thaliana"`.
 
 Output: `data/arabidopsis_thaliana_leaves.json`
+
+#### Endogenous human background (Recon3D)
+
+This path is independent of steps 6 and the Wikidata/HMDB workflow above; it only needs the files from steps 1–5 (`data/removed_leaf_classes_with_smiles.csv` and `data/class_to_leaf_descendants_map.json`).
+
+Run `BiGG/get_model.py`. This:
+
+1. Downloads the Recon3D model JSON from BiGG (`http://bigg.ucsd.edu/static/models/Recon3D.json`) to `data/Recon3D.json`.
+2. Calls `gather_recon3d_leaves()`, which collapses compartment-specific metabolite entries into unique compounds and resolves each to leaf ChEBI classes (directly, via parent expansion, or via UniChem InChIKey/HMDB cross-reference, as described above). Running the script prints a breakdown of how many compounds were resolved by each method, and how many were left unresolved.
+
+Output: `data/recon3d_leaves.json` (same `narrow_leaves` JSON shape as the other narrow backgrounds above, so it plugs into the website as `NARROW_BACKGROUND_LEAVES_JSON['endogenous_human']` without further changes).
 
 
 

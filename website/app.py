@@ -440,7 +440,11 @@ def run_analysis():
     background_from_form = request.form.get('background')
     if background_from_form:
         session['background'] = background_from_form
-    
+
+    # Get expand_background from form (allow changing it during re-run)
+    if request.method == 'POST':
+        session['expand_background'] = bool(request.form.get('expand_background'))
+
     # Keep the correction selection stable across re-runs.
     previous_correction = session.get('correction_method', {
         'bonferroni_correct': False,
@@ -615,13 +619,14 @@ def graph():
     correction_method = session.get('correction_method', {})
     classification = session.get('classification', 'structural')
     background = session.get('background', 'full')
-    return render_template('graph.html', 
+    return render_template('graph.html',
                          graph_file=graph_file,
-                         pruning=pruning, 
+                         pruning=pruning,
                          correction_method=correction_method,
                          classification=classification,
                          background=background,
-                         smiles_option=session.get('smiles_option'))
+                         smiles_option=session.get('smiles_option'),
+                         expand_background=session.get('expand_background', True))
 
 
 

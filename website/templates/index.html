@@ -15,35 +15,36 @@
         <p>Here, you can submit your study set for enrichment analysis based on the <a href="https://www.ebi.ac.uk/chebi/" style="color: #0f808d; text-decoration: none;">ChEBI ontology</a>. </p>
         <h4 class="mb-4">Input Study Set</h4>
 
-        <p>The input molecular entitites should either be in ChEBI ID format (e.g., CHEBI:16236) or as SMILES (eg. C2H6O). A mix of both is allowed.</p>
-        <p>Example submission format:</p>
+        <p>The input molecular entitites should either be in ChEBI ID format (e.g., CHEBI:16236) or as SMILES (eg. C2H6O).</p>
+        <p>A combination of both is allowed.</p>
+        <p><strong>Example submission format:</strong></p> 
         <pre>
 CHEBI:31463
 CHEBI:28426
         </pre>
 
-        <p>Example submission format with weights (tab or space-separated):</p>
+        <p><strong>Example submission format with weights (tab or space-separated):</strong></p>
         <pre>
 CHEBI:17079	0.7665
 CHEBI:46816	0.7465
         </pre>
 
         <h5 class="mb-4">Using SMILES</h5>
-        <p>If using SMILES, please read the "About Using SMILES" section and specify your preference below.</p>
+        <p>If using SMILES, please read the "Using SMILES" section and specify your preference below.</p>
         </p>
 
         <div class="mb-4" style="margin-left: 20px;">
             <div class="form-check">
                 <input type="radio" name="smiles_option" value="use_parents" id="use_parents" checked class="form-check-input">
                 <label for="use_parents" class="form-check-label">Use the direct parents of any unmapped SMILES</label>
-                <button type="button" class="btn btn-sm ms-2 info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Using Predicted Parents" data-bs-content="If your results show many nodes with weak enrichment using this option, try excluding unmapped SMILES instead.">
+                <button type="button" class="btn btn-sm ms-2 info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Using predicted parents" data-bs-content="If your results show many nodes with weak enrichment using this option, try excluding unmapped SMILES instead.">
                     🛈
                 </button>
             </div>
             <div class="form-check">
                 <input type="radio" name="smiles_option" value="exclude" id="exclude_unmapped" class="form-check-input">
                 <label for="exclude_unmapped" class="form-check-label">Exclude any unmapped SMILES</label>
-                <button type="button" class="btn btn-sm ms-2 info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Excluding Unmapped SMILES" data-bs-content="Unmapped SMILES will be displayed in the results section. Consider manually searching the ChEBI database to identify appropriate IDs.">
+                <button type="button" class="btn btn-sm ms-2 info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Excluding unmapped SMILES" data-bs-content="Unmapped SMILES will be displayed in the results section. Consider manually searching the ChEBI database to identify appropriate IDs.">
                     🛈
                 </button>
             </div>
@@ -54,7 +55,7 @@ CHEBI:46816	0.7465
 
         <br><br>
         <h4>Specify Target of Enrichment</h4>
-        <p>Read the "About Selecting Target of Enrichment" section for more information.</p>
+        <p>Read the "Selecting target of enrichment" section for more information.</p>
         <div class="mb-3">
             <div class="form-chek">
                 <input type="radio" name="classification" value="structural" required class="form-check-input">
@@ -71,25 +72,33 @@ CHEBI:46816	0.7465
         </div>
 
         <h4>Choose Background Set</h4>
-        <p>The baseline is using the full ChEBI database. The is also the option of using section of the onthology.</p>
+        <p>Either use the full ChEBI background population, or a subset of the ontology.</p>
 
         <div class="mb-3">
             <div class="form-chek">
                 <input type="radio" name="background" value="full" required class="form-check-input">
-                <label for="" class="form-check-label">Full ChEBI</label>
+                <label for="" class="form-check-label">Full background</label>
             </div>
             <div class="form-chek">
                 <input type="radio" name="background" value="human" class="form-check-input">
-                <label for="" class="form-check-label">Human related entities</label>
+                <label for="" class="form-check-label">Homo sapiens-based background 1</label>
+                <button type="button" class="btn btn-sm ms-2 info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Human-measured entities" data-bs-content="Based on data derived from the Human Metabolome Database (HMDB) and Lotus (taxonomy = Homo sapiens) and is thus only based on entities that have been measured in human samples.">
+                    🛈
+                </button>
             </div>
+             <div class="form-chek">
+                <input type="radio" name="background" value="endogenous_human" class="form-check-input">
+                <label for="" class="form-check-label">Homo sapiens-based background 2</label>
+                <button type="button" class="btn btn-sm ms-2 info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Human-synthesised entities" data-bs-content="Based on data derived from Recon3D (from BiGG Models) that only contains metabolites that are guaranteed to have genetic machinery to be synthesised in the human body, unlike the broader Homo sapiens background, which also includes externally-sourced human-associated compounds (eg drugs, diet).">
+                    🛈
+                </button>
+                </div>
             <div class="form-chek">
                 <input type="radio" name="background" value="arabidopsis_thaliana" class="form-check-input">
-                <label for="" class="form-check-label">Arabidopsis thaliana related entities</label>
-            </div>
-            <div class="form-chek">
-                <input type="radio" name="background" value="endogenous_human" class="form-check-input">
-                <label for="" class="form-check-label">Endogenous human background</label>
-                <button type="button" class="btn btn-sm ms-2 info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Endogenous Human Background" data-bs-content="Derived from Recon3D, a genome-scale reconstruction of human metabolism (BiGG Models). Includes only metabolites that participate in modelled human metabolic reactions, unlike the broader 'Human related entities' background, which also includes externally-sourced human-associated compounds (eg drugs, diet).">
+                <label for="" class="form-check-label">Arabidopsis thaliana-based background</label>
+                <button type="button" class="btn btn-sm ms-2 info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Arabidopsis thaliana related entities" data-bs-content="Based on data from Lotus (taxonomy = Arabidopsis thaliana) which is based on entities that have been measured in Arabidopsis thaliana samples.">
+                    🛈
+                </button>
             </div>
         </div>
 
@@ -104,31 +113,73 @@ CHEBI:46816	0.7465
     </form>
 
     <div class="info-container">
-        <h4 class="mb-4">About Selecting Target of Enrichment</h4>
-        <p>
-            <strong>ChEBI structure classification:</strong> The structure classification describes a molecular entity
-            based on its composition and/or the connectivity between its constituent atoms.
-        </p>
-        <p>
-            <strong>ChEBI role classification:</strong> The role classification describes the role of a molecular entity
-            within a biological context and/or its intended use by humans.
-        </p>
-        <p>
-            <strong>ChEBI structure and role classification ("Both"):</strong> The structure and role classification is the union
-            of both classifications. Note that the structure classification is significantly larger than the role
-            classification.
-            <br>
-        </p>
-        <br>
+        <h4 class="mb-2">
+            <button class="btn info-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#target-enrichment-info" aria-expanded="false" aria-controls="target-enrichment-info">
+                <i class="fa fa-chevron-right info-toggle-icon"></i> Selecting target of enrichment
+            </button>
+        </h4>
+        <div class="collapse" id="target-enrichment-info">
+            <p>The ChEBI ontology has two separate classification hierarchies: structure and role. The enrichment analysis can be performed on either of these hierarchies, or on both simultaneously.</p>
+            <p>
+                <strong>ChEBI structure classification:</strong> The structure classification describes a molecular entity
+                based on its composition and/or the connectivity between its constituent atoms.
+            </p>
+            <p>
+                <strong>ChEBI role classification:</strong> The role classification describes the role of a molecular entity
+                within a biological context and/or its intended use by humans.
+            </p>
+            <p>
+                <strong>ChEBI structure and role classification ("Both"):</strong> The structure and role classification is the union
+                of both classifications. Note that the structure classification is significantly larger than the role
+                classification.
+            </p>
+            <!-- The text above is copied directly from Binche ReadMe-->
+        </div>
 
-        <h4 class="mb-4">About Using SMILES</h4>
+        <h4 class="mb-2 mt-3">
+            <button class="btn info-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#using-smiles-info" aria-expanded="false" aria-controls="using-smiles-info">
+                <i class="fa fa-chevron-right info-toggle-icon"></i> Using SMILES
+            </button>
+        </h4>
+        <div class="collapse" id="using-smiles-info">
+            <p>When using SMILES, the enrichment analysis will be performed on the ChEBI entities that are mapped to the input SMILES.
+                If a SMILES is not mapped to any ChEBI entity, its direct parent classes can be predicted (this is done with
+                <a href="https://chebifier.hastingslab.org/" style="color: #0f808d; text-decoration: none;">Chebifier</a>)
+                and used for the enrichment analysis. Alternatively, the unmapped SMILES can be completely excluded, depending on the option you select.
+            </p>
+        </div>
 
-        <p>When using SMILES, the enrichment analysis will be performed on the ChEBI entities that are mapped to the input SMILES. 
-            If a SMILES is not mapped to any ChEBI entity, its direct parent classes can be predicted (this is done with
-            <a href="https://chebifier.hastingslab.org/" style="color: #0f808d; text-decoration: none;">Chebifier</a>)
-            and used for the enrichment analysis. Alternatively, the unmapped SMILES can be completely excluded. 
-        </p>
-        <!-- The text above is copied directly from Binche ReadMe-->
+        <h4 class="mb-2 mt-3">
+            <button class="btn info-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#background-info" aria-expanded="false" aria-controls="background-info">
+                <i class="fa fa-chevron-right info-toggle-icon"></i> Background sets
+            </button>
+        </h4>
+        <div class="collapse" id="background-info">
+
+            <p><strong>Homo sapiens-based background 1</strong></p>
+            <p>Based on data derived from the Human Metabolome Database (HMDB) and Lotus (taxonomy = Homo sapiens) and is thus only based on entities that have been measured in human samples.</p>
+
+            <p><strong>Homo sapiens-based background 2</strong></p>
+            <p>Based on data derived from Recon3D (from BiGG Models) that only contains metabolites that are guaranteed to have genetic machinery to be synthesised in the human body, unlike the broader Homo sapiens background, which also includes externally-sourced human-associated compounds (eg drugs, diet). </p>
+            
+            <p><strong>Arabidopsis thaliana-based background</strong></p>
+            <p>Based on data from Lotus (taxonomy = Arabidopsis thaliana) which is based on entities that have been measured in Arabidopsis thaliana samples.</p>
+            
+        </div>
+
+        <h4 class="mb-2 mt-3">
+            <button class="btn info-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#data-updates-info" aria-expanded="false" aria-controls="data-updates-info">
+                <i class="fa fa-chevron-right info-toggle-icon"></i> Data updates
+            </button>
+        </h4>
+        <div class="collapse" id="data-updates-info">
+            <p>Since the ChEBI ontology is continuously updated, monthly re-downloads of the data is automatically executed on the first of each month. The date of the last update is stated at the bottom right of the page. Observe that each update may affect the enrichment analysis results.
+            </p>
+            <p><strong>Data used to build the narrow backgrounds</strong></p>
+            <p>The <a href="https://adafede.github.io/dioxus/lotus-explorer/?download=true&format=csv&lang=en&taxon=%2A" style="color: #0f808d; text-decoration: none;">Lotus</a> data that is used for two of the narrow backgrounds is also re-downloaded together with the ontology. The data used from <a href="https://hmdb.ca/downloads?__cf_chl_f_tk=PKzA5S4Zu3B1eBTzecaAyljzuobbAYBpOpJhsI4ypYk-1783003779-1.0.1.1-tnAXv3O9XdikrbXh_8lgUqmCen.q.0l8xku7hzxTndY" style="color: #0f808d; text-decoration: none;">HMDB</a> was released on 2021-11-17, and the <a href="http://bigg.ucsd.edu/models/Recon3D" style="color: #0f808d; text-decoration: none;">Recon3D</a> model is from 2019-10-31.</p>
+            </p>
+        </div>
+
     </div>
     </div>
 </div>
@@ -139,6 +190,27 @@ CHEBI:46816	0.7465
     }
     .info-button:hover {
         text-decoration: none;
+    }
+    .info-toggle {
+        padding: 0;
+        border: none;
+        background: none;
+        font-size: inherit;
+        font-weight: inherit;
+        color: inherit;
+        text-align: left;
+        width: 100%;
+    }
+    .info-toggle:hover,
+    .info-toggle:focus {
+        color: #800020;
+    }
+    .info-toggle-icon {
+        transition: transform 0.2s ease-in-out;
+        font-size: 0.8em;
+    }
+    .info-toggle[aria-expanded="true"] .info-toggle-icon {
+        transform: rotate(90deg);
     }
 </style>
 

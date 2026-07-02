@@ -716,7 +716,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="pruningModalLabel">Change Background, Target, Correction Method, and Pruning</h5>
+                <h5 class="modal-title" id="pruningModalLabel">Change Settings</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -735,23 +735,38 @@
                             <input class="form-check-input" type="radio" name="background" id="background_human" value="human"
                             {% if background == 'human' %} checked {% endif %}>
                             <label class="form-check-label" for="background_human">
-                                Human background
+                                Homo sapiens-based background 1
                             </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="background" id="background_arabidopsis_thaliana" value="arabidopsis_thaliana"
-                            {% if background == 'arabidopsis_thaliana' %} checked {% endif %}>
-                            <label class="form-check-label" for="background_arabidopsis_thaliana">
-                                Arabidopsis thaliana background
-                            </label>
+                            <button type="button" class="btn btn-sm ms-2 info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Human-measured entities" data-bs-content="Based on data derived from the Human Metabolome Database (HMDB) and Lotus (taxonomy = Homo sapiens) and is thus only based on entities that have been measured in human samples.">
+                                🛈
+                            </button>
                         </div>
                         <div class="form-check">
                             <input class="form-check-input" type="radio" name="background" id="background_endogenous_human" value="endogenous_human"
                             {% if background == 'endogenous_human' %} checked {% endif %}>
                             <label class="form-check-label" for="background_endogenous_human">
-                                Endogenous human background
+                                Homo sapiens-based background 2
                             </label>
-                            <button type="button" class="btn btn-sm ms-2 info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Endogenous Human Background" data-bs-content="Derived from Recon3D, a genome-scale reconstruction of human metabolism (BiGG Models). Includes only metabolites that participate in modelled human metabolic reactions, unlike the broader 'Human background', which also includes externally-sourced human-associated compounds (eg drugs, diet).">
+                            <button type="button" class="btn btn-sm ms-2 info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Human-synthesised entities" data-bs-content="Based on data derived from Recon3D (from BiGG Models) that only contains metabolites that are guaranteed to have genetic machinery to be synthesised in the human body, unlike the broader Homo sapiens background, which also includes externally-sourced human-associated compounds (eg drugs, diet).">
+                                🛈
+                            </button>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="background" id="background_arabidopsis_thaliana" value="arabidopsis_thaliana"
+                            {% if background == 'arabidopsis_thaliana' %} checked {% endif %}>
+                            <label class="form-check-label" for="background_arabidopsis_thaliana">
+                                Arabidopsis thaliana-based background
+                            </label>
+                            <button type="button" class="btn btn-sm ms-2 info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Arabidopsis thaliana related entities" data-bs-content="Based on data from Lotus (taxonomy = Arabidopsis thaliana) which is based on entities that have been measured in Arabidopsis thaliana samples.">
+                                🛈
+                            </button>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" name="expand_background" id="expand_background" value="true"
+                            {% if expand_background %} checked {% endif %}>
+                            <label class="form-check-label" for="expand_background">
+                                If using a narrow background, expand it if some study-set leaves are not included
+                            </label>
                         </div>
                     </div>
                     <hr class="my-3" style="opacity: 0.3;">
@@ -878,8 +893,8 @@
                             <input class="form-check-input" type="radio" name="smiles_option" id="smiles_use_parents" value="use_parents" 
                             {% if smiles_option == 'use_parents' %} checked {% endif %}>
                             <label class="form-check-label" for="smiles_use_parents">
-                                Use predicted parents for unmapped SMILES
-                                <button type="button" class="btn btn-sm info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Using Predicted Parents" data-bs-content="When SMILES molecules cannot be directly mapped to a ChEBI ID, the most likely parents are predicted and used for the analysis. If your results show many nodes with weak enrichment using this option, try excluding unmapped SMILES instead;">
+                                Use the direct parents of any unmapped SMILES
+                                <button type="button" class="btn btn-sm info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Using predicted parents" data-bs-content="If your results show many nodes with weak enrichment using this option, try excluding unmapped SMILES instead.">
                                     🛈
                                 </button>
                             </label>
@@ -888,8 +903,8 @@
                             <input class="form-check-input" type="radio" name="smiles_option" id="smiles_exclude" value="exclude"
                             {% if smiles_option == 'exclude' %} checked {% endif %}>
                             <label class="form-check-label" for="smiles_exclude">
-                                Exclude unmapped SMILES
-                                <button type="button" class="btn btn-sm info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Excluding Unmapped SMILES" data-bs-content="Unmapped SMILES molecules are excluded from the analysis and are displayed in the results section (the previous page).">
+                                Exclude any unmapped SMILES
+                                <button type="button" class="btn btn-sm info-button" style="border: none; background: none; color: #800020; padding: 0;" data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" title="Excluding unmapped SMILES" data-bs-content="Unmapped SMILES will be displayed in the results section. Consider manually searching the ChEBI database to identify appropriate IDs.">
                                     🛈
                                 </button>
                             </label>
